@@ -53,14 +53,12 @@ p_2 = 1.85      # [g/cm^3]
 t_2 = 1.0       # [cm]
 
 # detector (for detective efficiency calc)
-mat_det = 'molybdenum'
-p_det =   10.22 # [g/cm^3]
-t_det =   0.60  # [cm]
+detector_filename = './input/detector/eta.npy'   # float32 array of E, eta(E)
 
 
 ### SPECTRA INFO
 ### ordered in descending effective energy
-spec_dir = './spectrum'
+spec_dir = './input/spectrum/'
 spec_files, spec_names = np.array([
             ['Accuray_treatment6MV.csv', '6MV Treatment' ],
             ['Accuray_detuned.csv',      'MV Detuned'    ],
@@ -97,9 +95,7 @@ if __name__ == '__main__':
         specs.append(spec_j)
 
     # initialize the detector
-    detector_material = Material(mat_det, p_det, t_det)
-    detector = Detector(detector_material, detector_mode, ideal_detector)
-
+    detector = Detector(detector_filename, detector_mode, ideal_detector)
     
     # iterate over all spectral combinations
     # if specs array is ordered, then spec_a is always high energy

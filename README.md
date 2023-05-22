@@ -1,6 +1,6 @@
 # dex-single-ray
 
-Signal detection framework for a single dual-energy x-ray through a 
+Signal detection toy model for a single dual-energy x-ray through a 
 two-material object. The dual signals enable the possibility for material 
 decomposition, so this framework can be used for computing an idealized
 basis material signal-to-noise ratio (SNR). In this script, SNR is computed

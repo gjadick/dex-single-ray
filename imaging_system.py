@@ -125,31 +125,30 @@ class Detector:
     3. Detector, detection function D(E) and detected signal lambda
 
     '''
-    def __init__(self, detector_material, detector_mode, ideal):
+    def __init__(self, filename, detector_mode, ideal):
         '''
-        detector_material : (Material) info about detector slab
+        detector_filename : (str) path to detector efficiency file, float32 array of E, eta(E)
         detector_mode : (str) 'PCD' or 'EID'
         ideal : (bool) whether the detector stops every photon
         '''
-        # copy over Material to access attenuation functions
-        self.detector_material = detector_material
-        
-        # copy over basic material aspects
-        self.material = detector_material.name
-        self.rho = detector_material.rho
-        self.t = detector_material.t
-        self.A = detector_material.A
-        
         self.mode = detector_mode
         self.ideal = ideal
+        self.filename = filename
         
+        # read file
+        data = np.fromfile(filename, dtype=np.float32)
+        self.N_energy = len(data)//2
+        self.E = data[:self.N_energy]      # 1st half is energies
+        self.eta = data[self.N_energy:]    # 2nd half is detective efficiencies
+        if ideal:
+            self.eta = np.ones(self.N_energy, dtype=np.float32)  # if ideal, switch to ones
+
     def get_psi(self, source, alpha=1):
         '''
-        get mode-specific psi (energy integrating vs counting)
+        get mode-specific weighting function (energy integrating vs counting)
         
             source : (Spectrum)
         '''
-        # 
         if self.mode == 'PCD':
             psi = np.ones(len(source.E))
         else:
@@ -160,23 +159,13 @@ class Detector:
         '''
         source : (Spectrum)
         '''
-        # get efficiency
-        if self.ideal:
-            eta = np.ones(len(source.E))
-        else:
-            # TEMP manual assignment test
-            # if "MV" in source.name:
-            #     eta = 0.3
-            # else:
-            #     eta = 1.0
-            eta = 1.0 - np.exp(-self.A * self.detector_material.mass_atten(source.E))
-
+        # interpolate efficiency to source energies
+        eta = np.interp(source.E, self.E, self.eta)
+        
         # get mode-specific psi
         psi = self.get_psi(source)
             
-        # get detection function
-        D = eta * psi
-        return D
+        return eta * psi
     
     
     
