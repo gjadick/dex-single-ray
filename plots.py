@@ -10,11 +10,11 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 
-from imaging_system import Source, Material
-from main import dose_target, run_id, outd, r_vec, t_1, t_bones  # get some params 
+from imaging_system import Source, Material, Detector
+from main import dose_target, run_id, outd, r_vec, t_1, t_bones, detector_mode, ideal_detector  # get some params 
 
 figd = f'output/figs/{run_id}/'
-savefig = False
+savefig = True
 if savefig:
     os.makedirs(figd, exist_ok=True)
 
@@ -41,7 +41,7 @@ plt.rcParams.update({
     "xtick.labelsize":8,
     "ytick.labelsize":8,
     # grid
-    "axes.grid" : True,
+    "axes.grid" : False,
     "axes.grid.which" : "major",
      "grid.color": "lightgray",
      "grid.linestyle": ":",
@@ -73,15 +73,14 @@ for j in range(len(spec_files)):
     spec_j.rescale_I0(scale)
     specs.append(spec_j)
     
-        
+# detector 
+detector_filename = './input/detector/eta.npy'   
+detector = Detector(detector_filename, detector_mode, ideal_detector)
+
+    
 # SNR vs. r for each t_bone
 data_mat1 = {}
 data_mat2 = {}
-
-t_bones = np.arange(1,11,1)
-dr = 0.01
-r_vec = np.arange(dr, 1.0, dr)  
-
 for spec1 in spec_names:
     for spec2 in spec_names:
         
@@ -122,6 +121,51 @@ dect_spec_names = [x.replace('_', '-') for x in dect_specs]
 def bf(string):  
     '''make text boldface'''
     return "\\textbf{"+string+"}"
+
+
+def label_panels(ax, c='k', loc='inside', dx=0.07, dy=0.07, fontsize=None,
+                 label_type='lowercase', label_format='({})'):
+    '''
+    Function to label panels of multiple subplots in a single figure.
+
+    Parameters
+    ----------
+    ax : matplotlib AxesSubplot
+    c : (str) color of text. The default is 'k'.
+    loc : (str), location of label, 'inside' or 'outside'. 
+    dx : (float) x location relative to upper left corner. The default is 0.07.
+    dy : (float) y location relative to upper left corner. The default is 0.07.
+    fontsize : (number), font size of label. The default is None.
+    label_type : (str), style of labels. The default is 'lowercase'.
+    label_format : (str) format string for label. The default is '({})'.
+
+    '''
+    if 'upper' in label_type:
+        labels = list(map(chr, range(65,91)))
+    elif 'lower' in label_type:
+        labels = list(map(chr, range(97, 123)))
+    else: # default to numbers
+        labels = np.arange(1,27).astype(str)
+    labels = [ label_format.format(x) for x in labels ]
+
+    # get location of text
+    if loc == 'outside':
+        xp, yp = -dx, 1+dy
+    else:
+        xp, yp = dx, 1-dy
+        
+    for i, axi in enumerate(ax.ravel()):
+        xmin, xmax = axi.get_xlim()
+        ymin, ymax = axi.get_ylim()
+        xloc = xmin + (xmax-xmin)*xp
+        yloc = ymin + (ymax-ymin)*yp
+        
+        label = labels[i]
+        print(xloc, yloc)
+        axi.text(xloc, yloc, bf(label), color=c, fontsize=fontsize,
+          va='center', ha='center')
+        
+    return None
 
 
 def heatmap(data, row_labels, col_labels, ax=None,
@@ -244,6 +288,7 @@ def annotate_heatmap(im, data=None, valfmt="{x:.2f}",
     return texts
 
 
+
 #%% ####################### TABLES: coords of r_peak, SNR_peak
 bone_ind = 0 # 1 cm bone
 
@@ -292,30 +337,38 @@ plt.show()
         
         
 #%% ########################## PLOT 2 :  SNRmax as FUNC OF TBONE
+color = True
 
-
+### get data
 snrmax_dect1_mat1 = np.max(data_mat1[dect_id1], axis=1)
 snrmax_dect1_mat2 = np.max(data_mat2[dect_id1], axis=1)
 snrmax_dect2_mat1 = np.max(data_mat1[dect_id2], axis=1)
 snrmax_dect2_mat2 = np.max(data_mat2[dect_id2], axis=1)
 
+### plot
 fig, ax_left = plt.subplots(1,1, figsize=[6,4])
-
 ax = ax_left.twinx()
+fname = 'plot2_snrmax_v_tbone_bw.pdf'
+if color:
+    fname = fname.replace('bw','color')
+    c1, c2 = 'rb'
+    for i, spine in enumerate(ax.spines.values()):
+        spine.set_edgecolor([c1,c2,'k','k'][i])
+else:
+    c1, c2 = 'kk'
 
 ax_left.set_xticks(t_bones)
 ax_left.set_xlabel('$t_\mathrm{bone}$ [cm]')
 
-
 # mat 1, tissue
 ax_left.set_ylabel('max SNR (tissue)' )
-ax_left.plot(t_bones, snrmax_dect2_mat1, c='k', marker='s', markerfacecolor='None', label='140kV-80kV')
-ax_left.plot(t_bones, snrmax_dect1_mat1, c='k', marker='o', markerfacecolor='None', label='MV-80kV')
+ax_left.plot(t_bones, snrmax_dect2_mat1, c=c1, marker='s', markerfacecolor='None', label='140kV-80kV')
+ax_left.plot(t_bones, snrmax_dect1_mat1, c=c1, marker='o', markerfacecolor='None', label='MV-80kV')
 
 # mat 2, bone    
 ax.set_ylabel('max SNR (bone)')#, rotation=-90 )
-ax.plot(t_bones, snrmax_dect2_mat2, ls=':', c='k', marker='s', markerfacecolor='None', label='140kV-80kV')
-ax.plot(t_bones, snrmax_dect1_mat2, ls=':', c='k', marker='o', markerfacecolor='None', label='MV-80kV')
+ax.plot(t_bones, snrmax_dect2_mat2, ls=':', c=c2, marker='s', markerfacecolor='None', label='140kV-80kV')
+ax.plot(t_bones, snrmax_dect1_mat2, ls=':', c=c2, marker='o', markerfacecolor='None', label='MV-80kV')
 
 ax_left.legend(title=bf('tissue'),loc='lower left')
 ax.legend(title=bf('bone'), loc='upper right')
@@ -328,12 +381,16 @@ Nvals = 5
 ax_left.set_yticks(np.linspace(0, ax_left.get_ybound()[1], Nvals))
 ax.set_yticks(np.linspace(0, ax.get_ybound()[1], Nvals))
 
+if color:
+    ax_left.yaxis.label.set_color(c1)
+    ax.yaxis.label.set_color(c2)
+    ax_left.tick_params(axis='y', colors=c1)
+    ax.tick_params(axis='y', colors=c2)
 
-# for axi in ax, ax_left:
-#     axi.set_ylim(0, None)
 fig.tight_layout()
+
 if savefig:
-    plt.savefig(figd+'plot2_snrmax_v_tbone_bw.pdf')
+    plt.savefig(figd + fname)
 plt.show()
 
 
@@ -372,6 +429,7 @@ for i, data_mat in enumerate([data_mat1, data_mat2]):
         axi.set_xlim(0,1)
         axi.set_xlabel('dose to spec1')
     
+    label_panels(ax)
     fig.tight_layout()
     if savefig:
         plt.savefig(figd+f'plot3c_snr_v_dose_multi_mat{i+1}.pdf')
@@ -411,6 +469,7 @@ for basismat, mat, kwargs in [['tissue',mat1, {'vmin':0, 'vmax':100}]
 
 #%% ###################### PLOT 5 : SPECTRA
 
+
 lss = ['-','--','-',':','--']
 colors = ['k','k','k','k','k']  # black
 tlw = 1
@@ -435,10 +494,35 @@ for j,spec in enumerate(specs):
         
 ax[0].legend(loc='upper right')
 ax[1].legend(loc='upper right')
+        
+label_panels(ax)
+
 fig.tight_layout()
 if savefig:
     plt.savefig( figd + 'spectra.pdf' )
 plt.show()
+
+
+
+
+#%% ######## Detector efficiency, eta vs. E
+
+fig,ax=plt.subplots(1, 1, figsize=[4, 3])
+ax.plot(detector.E, detector.eta, 'k-')
+ax.set_xlabel('energy [keV]')
+ax.set_ylabel('detective efficiency')
+ax.set_ylim(0, None)
+fig.tight_layout()
+if savefig:
+    plt.savefig( figd + 'detector_eta.pdf')
+plt.show()
+
+
+
+
+
+
+
 
 
 
