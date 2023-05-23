@@ -123,7 +123,7 @@ def bf(string):
     return "\\textbf{"+string+"}"
 
 
-def label_panels(ax, c='k', loc='inside', dx=0.07, dy=0.07, fontsize=None,
+def label_panels(ax, c='k', loc='outside', dx=-0.06, dy=0.06, fontsize=None,
                  label_type='lowercase', label_format='({})'):
     '''
     Function to label panels of multiple subplots in a single figure.
@@ -495,7 +495,7 @@ for j,spec in enumerate(specs):
 ax[0].legend(loc='upper right')
 ax[1].legend(loc='upper right')
         
-label_panels(ax)
+label_panels(ax, dx=0.05)
 
 fig.tight_layout()
 if savefig:
