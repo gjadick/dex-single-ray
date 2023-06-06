@@ -58,8 +58,8 @@ plt.rcParams.update({
 # spectra files
 spec_dir = './input/spectrum/'
 spec_files, spec_names = np.array([
-            ['Accuray_treatment6MV.csv', '6MV Treatment' ],
-            ['Accuray_detuned.csv',      'MV Detuned'    ],
+            ['Accuray_treatment6MV.csv', '6MV' ],
+            ['Accuray_detuned.csv',      'detunedMV'    ],
             ['spec140.mat',              '140kV'         ],
             ['spec120.mat',              '120kV'         ],
             ['spec80.mat',               '80kV'          ],
@@ -81,8 +81,9 @@ detector = Detector(detector_filename, detector_mode, ideal_detector)
 # SNR vs. r for each t_bone
 data_mat1 = {}
 data_mat2 = {}
-for spec1 in spec_names:
-    for spec2 in spec_names:
+spec_savelist = ['6MV Treatment', 'MV Detuned', '140kV', '120kV', '80kV']
+for spec1 in spec_savelist:
+    for spec2 in spec_savelist:
         
         specs_id = f'{spec1}_{spec2}'
         data_array_mat1 = np.zeros([len(t_bones), len(r_vec)], dtype=np.float64)
@@ -113,8 +114,12 @@ dect_specs = [
   '140kV_80kV',
   '120kV_80kV',]
 
+# change underscores to hyphens
 dect_spec_names = [x.replace('_', '-') for x in dect_specs]
 
+# change MV labels to match other labels, detunedMV and 6MV
+dect_spec_names = [x.replace('MV Detuned', 'detunedMV') for x in dect_spec_names]
+dect_spec_names = [x.replace('6MV Treatment', '6MV') for x in dect_spec_names]
 
 #%% Some helpful functions for plotting
 
@@ -362,13 +367,13 @@ ax_left.set_xlabel('$t_\mathrm{bone}$ [cm]')
 
 # mat 1, tissue
 ax_left.set_ylabel('max SNR (tissue)' )
-ax_left.plot(t_bones, snrmax_dect2_mat1, c=c1, marker='s', markerfacecolor='None', label='140kV-80kV')
-ax_left.plot(t_bones, snrmax_dect1_mat1, c=c1, marker='o', markerfacecolor='None', label='MV-80kV')
+ax_left.plot(t_bones, snrmax_dect2_mat1, c=c1, marker='s', markerfacecolor='None', label='kV-kV')
+ax_left.plot(t_bones, snrmax_dect1_mat1, c=c1, marker='o', markerfacecolor='None', label='MV-kV')
 
 # mat 2, bone    
 ax.set_ylabel('max SNR (bone)')#, rotation=-90 )
-ax.plot(t_bones, snrmax_dect2_mat2, ls=':', c=c2, marker='s', markerfacecolor='None', label='140kV-80kV')
-ax.plot(t_bones, snrmax_dect1_mat2, ls=':', c=c2, marker='o', markerfacecolor='None', label='MV-80kV')
+ax.plot(t_bones, snrmax_dect2_mat2, ls=':', c=c2, marker='s', markerfacecolor='None', label='kV-kV')
+ax.plot(t_bones, snrmax_dect1_mat2, ls=':', c=c2, marker='o', markerfacecolor='None', label='MV-kV')
 
 ax_left.legend(title=bf('tissue'),loc='lower left')
 ax.legend(title=bf('bone'), loc='upper right')
