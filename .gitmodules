@@ -1,0 +1,4 @@
+[submodule "x-tomo-sim"]
+	path = xtomosim
+	url = https://github.com/gjadick/x-tomo-sim
+	branch = main
