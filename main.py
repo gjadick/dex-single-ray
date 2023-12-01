@@ -24,81 +24,74 @@ changed for the scenario of interest.
 
 """
 
+import sys
+sys.path.append('xtomosim')  # for xtomosim
+from xtomosim.system import xRaySpectrum
+
 import os
 import numpy as np
-from imaging_system import Material, Object, Source, Detector, get_CRLBs_EID, get_CRLBs_PCD
+from imaging_system import Material, Object, Detector, get_CRLBs_EID, get_CRLBs_PCD
 
 
-### RUN PARAMETERS
+###########################################################################
+### INPUTS
+
+# run params
 dose_target = 1e-6        # [Gy]
 detector_mode = 'EID'     # PCD/EID
-ideal_detector = False    # T/F, detective efficiency = 1 ?
+detector_eta = None      # None or float between 0 and 1 (% photons stopped)
+detector_filename = './input/detector/eta_eid_mv.bin'   # float32 array of E, eta(E)
 
 # label the run according to the params
 run_id = f'{detector_mode}_{int(1e6*dose_target):04}uGy'
-if ideal_detector:
-    run_id = run_id + '_ideal'
-    
-outd = f'output/{run_id}/'
-os.makedirs(outd, exist_ok=True)
+if detector_eta is not None:
+    run_id = run_id + f'_{int(100*detector_eta):03}eta'
 
-### MATERIAL INFO
-### density p and thickness t
+# materials (p : density [g/cm3] and t : thickness [cm])
 material_1 = 'soft_tissue'
-p_1 = 1.0       # [g/cm^3]
-t_1 = 40.0      # [cm]
-
+p_1 = 1.0
+t_1 = 40.0
 material_2 = 'bone'
-p_2 = 1.85      # [g/cm^3]
-t_2 = 1.0       # [cm]
+p_2 = 1.85
+t_2 = 1.0 
+t_bones = np.arange(1,11,1.0)  # range of t_2 
 
-# detector (for detective efficiency calc)
-detector_filename = './input/detector/eta.npy'   # float32 array of E, eta(E)
-
-
-### SPECTRA INFO
-### ordered in descending effective energy
+# spectra, ordered in descending effective energy
 spec_dir = './input/spectrum/'
-spec_files, spec_names = np.array([
-            ['Accuray_treatment6MV.csv', '6MV Treatment' ],
-            ['Accuray_detuned.csv',      'MV Detuned'    ],
-            ['spec140.mat',              '140kV'         ],
-            ['spec120.mat',              '120kV'         ],
-            ['spec80.mat',               '80kV'          ],
-            ]).T
-N_spec = len(spec_files)
+spec_names = ['6MV', 'detunedMV', '140kV', '120kV', '80kV']
+dose_spec = 1e-3  # each spec is scaled to 1 mGy
 
-
-### VARIABLES 
-# dose allocation
+# dose allocation range
 dr = 0.01
 r_vec = np.arange(dr, 1.0, dr)  
 
-# bone thicknesses
-t_bones = np.arange(1,11,1.0)
 
+### END OF INPUTS
+###########################################################################
 
+# for saving outputs
+outd = f'output/{run_id}/'
+
+# init spectra with scaled dose to water cylinder (diameter = material 1 thickness)
+specs = []
+for name in spec_names:
+    file = f'{spec_dir}/{name}_1mGy_float32.bin'  
+    spec = xRaySpectrum(file, name)
+    spec.rescale_counts(dose_target / dose_spec)  # could also use `imaging_system.get_water_dose()`
+    specs.append(spec)
+        
+# init detector 
+detector = Detector(detector_filename, detector_mode, eta=detector_eta)
 
 
 if __name__ == '__main__':
     
     # create the output subdirectory    
     print(run_id)  # print check
-        
-    # load the 5 source spectra and rescale to target dose
-    specs = []
-    water = Material('water', 1.0, 20.0)  # center of 40 cm water cylinder
-    for j in range(N_spec):
-        spec_j = Source(spec_dir+spec_files[j], spec_names[j])
-        scale = dose_target / spec_j.get_water_dose(water)        
-        spec_j.rescale_I0(scale)
-        specs.append(spec_j)
-
-    # initialize the detector
-    detector = Detector(detector_filename, detector_mode, ideal_detector)
+    os.makedirs(outd, exist_ok=True)
     
     # iterate over all spectral combinations
-    # if specs array is ordered, then spec_a is always high energy
+    # if specs array is ordered, then spec_a is always high energy !!
     for j, spec_a in enumerate(specs[:-1]):
         for jj, spec_b in enumerate(specs[j+1:]):
 
@@ -108,9 +101,9 @@ if __name__ == '__main__':
             
             os.makedirs(outd_j, exist_ok=True)
             
-            # initialize the two material slabs and target object
+            # init the two material slabs and target object
             slab_1 = Material(material_1, p_1, t_1) # tissue
-            for t_2 in t_bones: # dif values of bone
+            for t_2 in t_bones:  # dif values of bone
                 slab_2 = Material(material_2, p_2, t_2) # bone
                 target = Object([slab_1, slab_2])
                 
@@ -122,8 +115,8 @@ if __name__ == '__main__':
                     signals = np.array([mat.A for mat in target.materials])
                     
                     # rescale each spectrum to add up to total dose
-                    spec_a.rescale_I0(r)
-                    spec_b.rescale_I0(1-r)
+                    spec_a.rescale_counts(r)
+                    spec_b.rescale_counts(1-r)
                     
                     # get variance (Fisher info depends on detector type)
                     if detector.mode == 'EID':
@@ -132,8 +125,8 @@ if __name__ == '__main__':
                         CRLBs = get_CRLBs_PCD(spec_a, spec_b, target, detector)
                                             
                     # scale spectra back to original magnitudes 
-                    spec_a.rescale_I0(1/r)
-                    spec_b.rescale_I0(1/(1-r))
+                    spec_a.rescale_counts(1/r)
+                    spec_b.rescale_counts(1/(1-r))
                     
                     # store each SNR
                     SNR_mat1_r, SNR_mat2_r = signals / np.sqrt(CRLBs)    
@@ -141,8 +134,8 @@ if __name__ == '__main__':
                     SNRs_mat2[i] = SNR_mat2_r
 
                 # save output
-                SNRs_mat1.astype(np.float64).tofile(outd_j + f'mat1_{int(t_1):02}tiss_{int(t_2):02}bone.npy')
-                SNRs_mat2.astype(np.float64).tofile(outd_j + f'mat2_{int(t_1):02}tiss_{int(t_2):02}bone.npy')
+                SNRs_mat1.astype(np.float64).tofile(outd_j + f'mat1_{int(t_1):02}tiss_{int(t_2):02}bone.bin')
+                SNRs_mat2.astype(np.float64).tofile(outd_j + f'mat2_{int(t_1):02}tiss_{int(t_2):02}bone.bin')
                 
                 
                 

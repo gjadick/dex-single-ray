@@ -25,13 +25,12 @@ detected after a Source passes through an Object to a Detector.
 This informs functions for calculating partial derivatives used in setting 
 up each Fisher information matrix to get the Cramer-Rao Lower Bound. 
 """
+import sys
+sys.path.append('xtomosim')  # for xtomosim
+import xtomosim.xcompy as xc
+from input.materials.MAC_interp import get_MAC, get_MAC_en
 
 import numpy as np
-from scipy.io import loadmat
-import pandas as pd
-
-# for mass attenuation coefficients
-from input.materials.MAC_interp import get_MAC, get_MAC_en
 
 
 class Material:
@@ -53,6 +52,20 @@ class Material:
         return get_MAC_en(self.name, E)
 
 
+def get_water_dose(I0, E, water_diameter):
+    '''
+    Get the estimated dose to the center of a water cylinder.
+        E : energy bins
+        I0 : x-ray counts in each energy bin
+        water_diameter : water cylinder diameter in cm
+    '''
+    # get beam intensity at center of water cylinder
+    I = I0 * np.exp(-0.5 * water_diameter * xc.mixatten('H2O', E))
+    dose = np.trapz(E * I * get_MAC_en('water', E), x=E)   # assume CPE (Attix Eqn 11.1)
+    dose *= 1.602e-13   # convert from keV/g to Gy
+    return dose
+
+
 class Object: 
     '''
     Class handling an object of many slabs, assumed to be arranged sequentially.
@@ -69,55 +82,53 @@ class Object:
         T = np.exp(np.sum([-mat.A * mat.mass_atten(source.E) for mat in self.materials], axis=0))
         return T
     
-    
 
-class Source:
-    '''
-    Class for handling the spectrum at all three stages of the imaging process:
-        1. Source, initial spectrum I0(E)
+# class Source:
+#     '''
+#     Class for handling the spectrum at all three stages of the imaging process:
+#         1. Source, initial spectrum I0(E)
         
-    '''
-    def __init__(self, filename, name):
+#     '''
+#     def __init__(self, filename, name):
         
-        self.filename = filename 
-        self.name = name
+#         self.filename = filename 
+#         self.name = name
         
-        # attempt reading file
-        try:  
-            if 'Accuray' in filename:
-                spec_data = pd.read_csv(filename, sep=',')
-                self.I0_raw = spec_data['Weight'].to_numpy()
-                self.E = spec_data['MeV'].to_numpy()*1000 # convert MeV -> keV
-            else:
-                spec_data = loadmat(filename)
-                self.I0_raw = spec_data['ss'][:,0]
-                self.E = spec_data['ee'][:,0]
-        except:
-            print(f"Failed to open spectrum filename {filename}, failed to initialize.")
+#         # attempt reading file
+#         try:  
+#             if 'Accuray' in filename:
+#                 spec_data = pd.read_csv(filename, sep=',')
+#                 self.I0_raw = spec_data['Weight'].to_numpy()
+#                 self.E = spec_data['MeV'].to_numpy()*1000 # convert MeV -> keV
+#             else:
+#                 spec_data = loadmat(filename)
+#                 self.I0_raw = spec_data['ss'][:,0]
+#                 self.E = spec_data['ee'][:,0]
+#         except:
+#             print(f"Failed to open spectrum filename {filename}, failed to initialize.")
         
-        # normalize counts
-        self.I0 = self.I0_raw #/np.trapz(self.I0_raw, x=self.E)
+#         # normalize counts
+#         self.I0 = self.I0_raw #/np.trapz(self.I0_raw, x=self.E)
         
-    def rescale_I0(self, scale):
-        self.I0 = self.I0 * scale
+#     def rescale_I0(self, scale):
+#         self.I0 = self.I0 * scale
 
-    def get_water_dose(self, water):
-        '''
-        Get the estimated dose through some water-equivalent attenuation.
-            water : (Object)
-        '''
-        # get spectra attenuation through water
-        T_water = np.exp(-water.A * water.mass_atten(self.E))
-        I_water = self.I0 * T_water
+#     def get_water_dose(self, water):
+#         '''
+#         Get the estimated dose through some water-equivalent attenuation.
+#             water : (Object)
+#         '''
+#         # get spectra attenuation through water
+#         T_water = np.exp(-water.A * water.mass_atten(self.E))
+#         I_water = self.I0 * T_water
         
-        # get MAC_en for water
-        MAC_en = water.mass_energy(self.E)
+#         # get MAC_en for water
+#         MAC_en = water.mass_energy(self.E)
         
-        # get dose
-        dose = np.trapz(self.E * I_water * MAC_en, x=self.E)    # assume CPE (Attix Eqn 11.1)
-        dose *= 1.602e-13   # convert from keV/g to Gy
-        return dose
-
+#         # get dose
+#         dose = np.trapz(self.E * I_water * MAC_en, x=self.E)    # assume CPE (Attix Eqn 11.1)
+#         dose *= 1.602e-13   # convert from keV/g to Gy
+#         return dose
 
         
 class Detector:
@@ -125,28 +136,27 @@ class Detector:
     3. Detector, detection function D(E) and detected signal lambda
 
     '''
-    def __init__(self, filename, detector_mode, ideal):
+    def __init__(self, filename, detector_mode, eta=None):
         '''
         detector_filename : (str) path to detector efficiency file, float32 array of E, eta(E)
         detector_mode : (str) 'PCD' or 'EID'
-        ideal : (bool) whether the detector stops every photon
+        eta :  (None or float) % photons stopped by detector. If not None, ignore detector_filename
         '''
         self.mode = detector_mode
-        self.ideal = ideal
         self.filename = filename
         
-        # read file
-        data = np.fromfile(filename, dtype=np.float32)
-        self.N_energy = len(data)//2
-        self.E = data[:self.N_energy]      # 1st half is energies
-        self.eta = data[self.N_energy:]    # 2nd half is detective efficiencies
-        if ideal:
-            self.eta = np.ones(self.N_energy, dtype=np.float32)  # if ideal, switch to ones
+        if eta is not None:
+            self.E = np.linspace(0.1, 6000, 10)  # dummy energies
+            self.eta = eta * np.ones(len(self.E), dtype=np.float32)  # constant efficiency
+        else:  # read file
+            data = np.fromfile(filename, dtype=np.float32)
+            N_energy = len(data)//2
+            self.E = data[:N_energy]      # 1st half is energies
+            self.eta = data[N_energy:]    # 2nd half is detective efficiencies
 
     def get_psi(self, source, alpha=1):
         '''
         get mode-specific weighting function (energy integrating vs counting)
-        
             source : (Spectrum)
         '''
         if self.mode == 'PCD':
@@ -159,14 +169,9 @@ class Detector:
         '''
         source : (Spectrum)
         '''
-        # interpolate efficiency to source energies
-        eta = np.interp(source.E, self.E, self.eta)
-        
-        # get mode-specific psi
-        psi = self.get_psi(source)
-            
+        eta = np.interp(source.E, self.E, self.eta)  # interpolate efficiency to source energies
+        psi = self.get_psi(source)  # get mode-specific psi            
         return eta * psi
-    
     
     
 def get_signal(source, target, detector):
@@ -176,7 +181,6 @@ def get_signal(source, target, detector):
     y = np.trapz(source.I0 * T * D, x=source.E)
 
     return y
-
 
 
 def get_variance(source, target, detector):
@@ -193,7 +197,6 @@ def get_variance(source, target, detector):
     v = np.trapz(psi * source.I0 * T * D , x=source.E)
 
     return v
-
 
 
 def get_signal_partials(source, target, detector):
@@ -213,7 +216,6 @@ def get_signal_partials(source, target, detector):
     return signal_partials
 
 
-
 def get_variance_partials(source, target, detector):
     T = target.get_transmission_function(source)
     D = detector.get_detection_function(source)
@@ -226,7 +228,6 @@ def get_variance_partials(source, target, detector):
         variance_partials.append(dv_dA)
         
     return variance_partials
-
 
 
 def get_CRLBs_PCD(spec_a, spec_b, target, detector):
@@ -251,7 +252,6 @@ def get_CRLBs_PCD(spec_a, spec_b, target, detector):
     CRLB_2 = (y_a*m_21**2 + y_b*m_11**2) / (m_11*m_22 - m_12*m_21)**2
 
     return np.array([CRLB_1, CRLB_2])
-
 
 
 def get_CRLBs_EID(spec_a, spec_b, target, detector):
