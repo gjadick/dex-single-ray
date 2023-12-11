@@ -82,61 +82,14 @@ class Object:
         T = np.exp(np.sum([-mat.A * mat.mass_atten(source.E) for mat in self.materials], axis=0))
         return T
     
-
-# class Source:
-#     '''
-#     Class for handling the spectrum at all three stages of the imaging process:
-#         1. Source, initial spectrum I0(E)
-        
-#     '''
-#     def __init__(self, filename, name):
-        
-#         self.filename = filename 
-#         self.name = name
-        
-#         # attempt reading file
-#         try:  
-#             if 'Accuray' in filename:
-#                 spec_data = pd.read_csv(filename, sep=',')
-#                 self.I0_raw = spec_data['Weight'].to_numpy()
-#                 self.E = spec_data['MeV'].to_numpy()*1000 # convert MeV -> keV
-#             else:
-#                 spec_data = loadmat(filename)
-#                 self.I0_raw = spec_data['ss'][:,0]
-#                 self.E = spec_data['ee'][:,0]
-#         except:
-#             print(f"Failed to open spectrum filename {filename}, failed to initialize.")
-        
-#         # normalize counts
-#         self.I0 = self.I0_raw #/np.trapz(self.I0_raw, x=self.E)
-        
-#     def rescale_I0(self, scale):
-#         self.I0 = self.I0 * scale
-
-#     def get_water_dose(self, water):
-#         '''
-#         Get the estimated dose through some water-equivalent attenuation.
-#             water : (Object)
-#         '''
-#         # get spectra attenuation through water
-#         T_water = np.exp(-water.A * water.mass_atten(self.E))
-#         I_water = self.I0 * T_water
-        
-#         # get MAC_en for water
-#         MAC_en = water.mass_energy(self.E)
-        
-#         # get dose
-#         dose = np.trapz(self.E * I_water * MAC_en, x=self.E)    # assume CPE (Attix Eqn 11.1)
-#         dose *= 1.602e-13   # convert from keV/g to Gy
-#         return dose
-
-        
+  
 class Detector:
     '''
     3. Detector, detection function D(E) and detected signal lambda
 
     '''
-    def __init__(self, filename, detector_mode, eta=None):
+    def __init__(self, filename, detector_mode, std_electronic=0,
+                 eta=None, E_threshold_high=None, E_threshold_low=None):
         '''
         detector_filename : (str) path to detector efficiency file, float32 array of E, eta(E)
         detector_mode : (str) 'PCD' or 'EID'
@@ -144,6 +97,7 @@ class Detector:
         '''
         self.mode = detector_mode
         self.filename = filename
+        self.std_electronic = std_electronic  # electronic noise standard deviation
         
         if eta is not None:
             self.E = np.linspace(0.1, 6000, 10)  # dummy energies
@@ -153,6 +107,12 @@ class Detector:
             N_energy = len(data)//2
             self.E = data[:N_energy]      # 1st half is energies
             self.eta = data[N_energy:]    # 2nd half is detective efficiencies
+            
+        # Spectral detector : set high and/or low energy thresholds, if provided
+        if E_threshold_high is not None:
+            self.eta[self.E > E_threshold_high] = 0
+        if E_threshold_low is not None:
+            self.eta[self.E < E_threshold_low] = 0
 
     def get_psi(self, source, alpha=1):
         '''
@@ -194,7 +154,8 @@ def get_variance(source, target, detector):
     psi = detector.get_psi(source)
         
     # variance has factor of psi**2 (one is already contained in D)
-    v = np.trapz(psi * source.I0 * T * D , x=source.E)
+    # also add electronic noise (default is 0)
+    v = np.trapz(psi * source.I0 * T * D , x=source.E) + detector.std_electronic**2
 
     return v
 
@@ -230,22 +191,25 @@ def get_variance_partials(source, target, detector):
     return variance_partials
 
 
-def get_CRLBs_PCD(spec_a, spec_b, target, detector):
+def get_CRLBs_PCD(spec_a, spec_b, target, detector_a, detector_b=None):
     '''
     Poisson noise CRLB calculation
     '''
+    if detector_b is None:
+        detector_b = detector_a
+        
     # assumes two materials
     N_mat = len(target.materials)
     if N_mat > 2:
         print(f"Error, CRLB calculation is for 2 materials (currently using {N_mat}")
         return -1
     
-    y_a = get_signal(spec_a, target, detector)
-    y_b = get_signal(spec_b, target, detector)
+    y_a = get_signal(spec_a, target, detector_a)
+    y_b = get_signal(spec_b, target, detector_b)
     
     # m_ji = partial derivative of spectrum j w.r.t. material i
-    m_11, m_12 = get_signal_partials(spec_a, target, detector)
-    m_21, m_22 = get_signal_partials(spec_b, target, detector)
+    m_11, m_12 = get_signal_partials(spec_a, target, detector_a)
+    m_21, m_22 = get_signal_partials(spec_b, target, detector_b)
     
     # get CRLB for each material
     CRLB_1 = (y_a*m_22**2 + y_b*m_12**2) / (m_11*m_22 - m_12*m_21)**2
@@ -254,10 +218,13 @@ def get_CRLBs_PCD(spec_a, spec_b, target, detector):
     return np.array([CRLB_1, CRLB_2])
 
 
-def get_CRLBs_EID(spec_a, spec_b, target, detector):
+def get_CRLBs_EID(spec_a, spec_b, target, detector_a, detector_b=None):
     '''
     Compound Poisson noise CRLB calculations (approx as Gaussian)
     '''
+    if detector_b is None:
+        detector_b = detector_a
+        
     # assumes two materials
     N_mat = len(target.materials)
     if N_mat > 2:
@@ -265,16 +232,16 @@ def get_CRLBs_EID(spec_a, spec_b, target, detector):
         return -1
     
     # get signal variances
-    v_a = get_variance(spec_a, target, detector)
-    v_b = get_variance(spec_b, target, detector)
+    v_a = get_variance(spec_a, target, detector_a)
+    v_b = get_variance(spec_b, target, detector_b)
         
     # get m_ji (partial derivative of signal j w.r.t. material i)
-    m_11, m_12 = get_signal_partials(spec_a, target, detector)
-    m_21, m_22 = get_signal_partials(spec_b, target, detector)
+    m_11, m_12 = get_signal_partials(spec_a, target, detector_a)
+    m_21, m_22 = get_signal_partials(spec_b, target, detector_b)
     
     # get v_ji (partial derivatives of variance j w.r.t material i)
-    v_11, v_12 = get_variance_partials(spec_a, target, detector)
-    v_21, v_22 = get_variance_partials(spec_b, target, detector)
+    v_11, v_12 = get_variance_partials(spec_a, target, detector_a)
+    v_21, v_22 = get_variance_partials(spec_b, target, detector_b)
     
     # Fisher matrix elements
     F11 = (1/v_a)*m_11*m_11 + (1/v_b)*m_21*m_21 + (1/2)*( (1/v_a**2)*v_11*v_11 + (1/v_b**2)*v_21*v_21 )

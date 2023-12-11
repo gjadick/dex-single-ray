@@ -32,15 +32,21 @@ import os
 import numpy as np
 from imaging_system import Material, Object, Detector, get_CRLBs_EID, get_CRLBs_PCD
 
+# for test plots
+import matplotlib.pyplot as plt
+
 
 ###########################################################################
 ### INPUTS
 
 # run params
 dose_target = 1e-6        # [Gy]
-detector_mode = 'EID'     # PCD/EID
+detector_mode = 'PCD'     # PCD/EID
 detector_eta = None      # None or float between 0 and 1 (% photons stopped)
-detector_filename = './input/detector/eta_eid_mv.bin'   # float32 array of E, eta(E)
+detector_filename = './input/detector/eta_pcd_Si_30mm.bin'   # float32 array of E, eta(E)
+#E_thresh_vec = np.arange(10, 1001, 10)  # spectral detector energy thresholds [keV]
+E_thresh_vec = np.arange(1010, 6000, 10)  # spectral detector energy thresholds [keV]
+
 
 # label the run according to the params
 run_id = f'{detector_mode}_{int(1e6*dose_target):04}uGy'
@@ -58,12 +64,15 @@ t_bones = np.arange(1,11,1.0)  # range of t_2
 
 # spectra, ordered in descending effective energy
 spec_dir = './input/spectrum/'
-spec_names = ['6MV', 'detunedMV', '140kV', '120kV', '80kV']
-dose_spec = 1e-3  # each spec is scaled to 1 mGy
+spec_names = ['6MV', 'detunedMV', '140kV', '120kV', '80kV']  # all available spectra
+spec_name1 = '6MV'
+spec_name2 = '80kV'
+dose_spec = 1e-3  # each spec file has a dose scaled to 1 mGy (center of 40-cm water cylinder)
 
 # dose allocation range
 dr = 0.01
 r_vec = np.arange(dr, 1.0, dr)  
+
 
 
 ### END OF INPUTS
@@ -72,14 +81,13 @@ r_vec = np.arange(dr, 1.0, dr)
 # for saving outputs
 outd = f'output/{run_id}/'
 
-# init spectra with scaled dose to water cylinder (diameter = material 1 thickness)
-specs = []
-for name in spec_names:
-    file = f'{spec_dir}/{name}_1mGy_float32.bin'  
-    spec = xRaySpectrum(file, name)
-    spec.rescale_counts(dose_target / dose_spec)  # could also use `imaging_system.get_water_dose()`
-    specs.append(spec)
-        
+# init spectra with scaled dose to water cylinder 
+spec_a = xRaySpectrum(f'{spec_dir}/{spec_name1}_1mGy_float32.bin', spec_name1)
+spec_b = xRaySpectrum(f'{spec_dir}/{spec_name2}_1mGy_float32.bin', spec_name2)
+spec_a.rescale_counts(dose_target / dose_spec)  
+spec_b.rescale_counts(dose_target / dose_spec)  # could also use `imaging_system.get_water_dose()`
+
+
 # init detector 
 detector = Detector(detector_filename, detector_mode, eta=detector_eta)
 
@@ -90,13 +98,67 @@ if __name__ == '__main__':
     print(run_id)  # print check
     os.makedirs(outd, exist_ok=True)
     
-    # iterate over all spectral combinations
-    # if specs array is ordered, then spec_a is always high energy !!
-    for j, spec_a in enumerate(specs[:-1]):
-        for jj, spec_b in enumerate(specs[j+1:]):
+    # 1 : MV-kV SNR vs. dose allocation using a vanilla PCD (no energy threshold)
+    if True:
+        outd_j = outd + f'{spec_a.name}_{spec_b.name}/'
+        print(outd_j)
+        
+        os.makedirs(outd_j, exist_ok=True)
+        
+        # init the two material slabs and target object
+        slab_1 = Material(material_1, p_1, t_1) # tissue
+        for t_2 in t_bones:  # dif values of bone
+            slab_2 = Material(material_2, p_2, t_2) # bone
+            target = Object([slab_1, slab_2])
+            
+            # SNR as a function of dose allocation r, SNR(r)
+            SNRs_mat1 = np.zeros(len(r_vec))   # initialize SNR vecs
+            SNRs_mat2 = np.zeros(len(r_vec))
+            for i, r in enumerate(r_vec):
+                # get true mass thicknesses
+                signals = np.array([mat.A for mat in target.materials])
+                
+                # rescale each spectrum to add up to total dose
+                spec_a.rescale_counts(r)
+                spec_b.rescale_counts(1-r)
+                
+                # get variance (Fisher info depends on detector type)
+                if detector.mode == 'EID':
+                    CRLBs = get_CRLBs_EID(spec_a, spec_b, target, detector)
+                else:  # PCD
+                    CRLBs = get_CRLBs_PCD(spec_a, spec_b, target, detector)
+                                        
+                # scale spectra back to original magnitudes 
+                spec_a.rescale_counts(1/r)
+                spec_b.rescale_counts(1/(1-r))
+                
+                # store each SNR
+                SNR_mat1_r, SNR_mat2_r = signals / np.sqrt(CRLBs)    
+                SNRs_mat1[i] = SNR_mat1_r
+                SNRs_mat2[i] = SNR_mat2_r
+    
+            # save output
+            SNRs_mat1.astype(np.float64).tofile(outd_j + f'mat1_{int(t_1):02}tiss_{int(t_2):02}bone.bin')
+            SNRs_mat2.astype(np.float64).tofile(outd_j + f'mat2_{int(t_1):02}tiss_{int(t_2):02}bone.bin')
+            
+            plt.title(f'{spec_a.name} - {t_2:.0f} cm bone')
+            plt.ylabel('SNR')
+            plt.xlabel('dose to MV spectrum')
+            plt.plot(r_vec, SNRs_mat1, 'r-', label='tissue')
+            plt.plot(r_vec, SNRs_mat2, 'k-', label='bone')
+            plt.axvline(r_vec[np.argmax(SNRs_mat1)], color='r')
+            plt.axvline(r_vec[np.argmax(SNRs_mat2)], color='k')
+            plt.legend()
+            plt.show()
 
-            # make subdirectory for each pair
-            outd_j = outd + f'{spec_a.name}_{spec_b.name}/'
+    # 2 : MV only, SNR vs E_thresh (one bone thickness?)
+    if True:
+        for E_thresh in E_thresh_vec:        
+            spec = spec_a  # use the first spec [MV] only
+            detector_low = Detector(detector_filename, detector_mode, eta=detector_eta, E_threshold_high=E_thresh)
+            detector_high = Detector(detector_filename, detector_mode, eta=detector_eta, E_threshold_low=E_thresh)
+        
+            outd_j = outd + f'{spec_a.name}_spectral_{E_thresh:03}keV/'
             print(outd_j)
             
             os.makedirs(outd_j, exist_ok=True)
@@ -118,11 +180,11 @@ if __name__ == '__main__':
                     spec_a.rescale_counts(r)
                     spec_b.rescale_counts(1-r)
                     
-                    # get variance (Fisher info depends on detector type)
-                    if detector.mode == 'EID':
-                        CRLBs = get_CRLBs_EID(spec_a, spec_b, target, detector)
-                    else:  # PCD
-                        CRLBs = get_CRLBs_PCD(spec_a, spec_b, target, detector)
+                    if detector.mode == 'EID':  # WARNING : EID doesn't make sense for spectral detection
+                        print('Warning! Using EID mode with spectral detection!')
+                        CRLBs = get_CRLBs_EID(spec, spec, target, detector_low, detector_high)
+                    else:  
+                        CRLBs = get_CRLBs_PCD(spec, spec, target, detector_low, detector_high)
                                             
                     # scale spectra back to original magnitudes 
                     spec_a.rescale_counts(1/r)
@@ -132,14 +194,29 @@ if __name__ == '__main__':
                     SNR_mat1_r, SNR_mat2_r = signals / np.sqrt(CRLBs)    
                     SNRs_mat1[i] = SNR_mat1_r
                     SNRs_mat2[i] = SNR_mat2_r
-
+        
                 # save output
                 SNRs_mat1.astype(np.float64).tofile(outd_j + f'mat1_{int(t_1):02}tiss_{int(t_2):02}bone.bin')
                 SNRs_mat2.astype(np.float64).tofile(outd_j + f'mat2_{int(t_1):02}tiss_{int(t_2):02}bone.bin')
                 
-                
-                
-                
-                
+            
+    
+    
+# #%% test plots
+# plt.plot(r_vec, SNRs_mat1, 'r-', label=f'{t_1:.0f} cm tissue')
+# plt.plot(r_vec, SNRs_mat2, 'k-', label=f'{t_2:.0f} cm bone')
+# plt.axvline(r_vec[np.argmax(SNRs_mat1)], color='r')
+# plt.axvline(r_vec[np.argmax(SNRs_mat2)], color='k')
+# plt.legend()
+# plt.show()
+
+
+
+
+
+
+
+
+
         
         

@@ -61,44 +61,6 @@ plt.rcParams.update({
     "legend.framealpha":1.0 ,  
      })
 
-#%%
-
-###################### READ THE DATA AND STORE IN DICTIONARY
-
-# load spectra
-specs = []
-for name in spec_names:
-    file = f'{spec_dir}/{name}_1mGy_float32.bin'  
-    spec = xRaySpectrum(file, name)
-    spec.rescale_counts(dose_target / dose_spec )
-    specs.append(spec)
-        
-# SNR vs. r for each t_bone
-data_mat1 = {}
-data_mat2 = {}
-dect_specs = []
-
-for j, spec_a in enumerate(specs[:-1]):
-    for jj, spec_b in enumerate(specs[j+1:]):
-        specs_id = f'{spec_a.name}_{spec_b.name}'
-        if specs_id.count('MV') > 1:  # ignore MV-MV spec combos
-            pass
-        else:
-            dect_specs.append(specs_id)
-            data_array_mat1 = np.zeros([len(t_bones), len(r_vec)], dtype=np.float64)
-            data_array_mat2 = np.zeros([len(t_bones), len(r_vec)], dtype=np.float64)
-            for i, t_2 in enumerate(t_bones):
-                fname1 = outd + specs_id + f'/mat1_{int(t_1):02}tiss_{int(t_2):02}bone.bin'
-                fname2 = outd + specs_id + f'/mat2_{int(t_1):02}tiss_{int(t_2):02}bone.bin'
-                data_array_mat1[i,:] = np.fromfile(fname1, dtype=np.float64)
-                data_array_mat2[i,:] = np.fromfile(fname2, dtype=np.float64)
-            data_mat1[specs_id] = data_array_mat1
-            data_mat2[specs_id] = data_array_mat2
-        
-
-# Two DE-CT acquisitions of interest for comparison: MV-kV versus kV-kV
-dect_id1 = 'detunedMV_80kV'
-dect_id2 = '140kV_80kV'
 
 
 #%% Some helpful functions for plotting
@@ -273,436 +235,477 @@ def annotate_heatmap(im, data=None, valfmt="{x:.2f}",
     return texts
 
 
+#%%
+
+if __name__ == '__main__':
+
+###################### READ THE DATA AND STORE IN DICTIONARY
+
+    # load spectra
+    specs = []
+    for name in spec_names:
+        file = f'{spec_dir}/{name}_1mGy_float32.bin'  
+        spec = xRaySpectrum(file, name)
+        spec.rescale_counts(dose_target / dose_spec )
+        specs.append(spec)
+            
+    # SNR vs. r for each t_bone
+    data_mat1 = {}
+    data_mat2 = {}
+    dect_specs = []
+    
+    for j, spec_a in enumerate(specs[:-1]):
+        for jj, spec_b in enumerate(specs[j+1:]):
+            specs_id = f'{spec_a.name}_{spec_b.name}'
+            if specs_id.count('MV') > 1:  # ignore MV-MV spec combos
+                pass
+            else:
+                dect_specs.append(specs_id)
+                data_array_mat1 = np.zeros([len(t_bones), len(r_vec)], dtype=np.float64)
+                data_array_mat2 = np.zeros([len(t_bones), len(r_vec)], dtype=np.float64)
+                for i, t_2 in enumerate(t_bones):
+                    fname1 = outd + specs_id + f'/mat1_{int(t_1):02}tiss_{int(t_2):02}bone.bin'
+                    fname2 = outd + specs_id + f'/mat2_{int(t_1):02}tiss_{int(t_2):02}bone.bin'
+                    data_array_mat1[i,:] = np.fromfile(fname1, dtype=np.float64)
+                    data_array_mat2[i,:] = np.fromfile(fname2, dtype=np.float64)
+                data_mat1[specs_id] = data_array_mat1
+                data_mat2[specs_id] = data_array_mat2
+            
+    
+    # Two DE-CT acquisitions of interest for comparison: MV-kV versus kV-kV
+    dect_id1 = 'detunedMV_80kV'
+    dect_id2 = '140kV_80kV'
+
 
 #%% ####################### TABLES: coords of r_peak, SNR_peak
-bone_ind = 0 # 1 cm bone
-
-## TWO TABLES
-# for i_mat, data_mat in enumerate([data_mat1, data_mat2]):
-#     print(f'\n\nTABLE {i_mat+1}\n')
-#     for dect_id in specs:
-#         spect_name = dect_id.replace('_', '-')
-#         v1 = data_mat[dect_id][0]
-#         rmax1, snrmax1 = r_vec[np.argmax(v1)], np.max(v1)
-#         print(f'{spect_name:20}  & {rmax1:6.2f}  &   {snrmax1:6.2f}    \\\\' )
-
-## ONE TABLE
-for dect_id in dect_specs:
-    spect_name = dect_id.replace('_', '-')
+    bone_ind = 0 # 1 cm bone
     
-    v1 = data_mat1[dect_id][0]
-    rmax1, snrmax1 = r_vec[np.argmax(v1)], np.max(v1)
+    ## TWO TABLES
+    # for i_mat, data_mat in enumerate([data_mat1, data_mat2]):
+    #     print(f'\n\nTABLE {i_mat+1}\n')
+    #     for dect_id in specs:
+    #         spect_name = dect_id.replace('_', '-')
+    #         v1 = data_mat[dect_id][0]
+    #         rmax1, snrmax1 = r_vec[np.argmax(v1)], np.max(v1)
+    #         print(f'{spect_name:20}  & {rmax1:6.2f}  &   {snrmax1:6.2f}    \\\\' )
     
-    v2 = data_mat2[dect_id][0]
-    rmax2, snrmax2 = r_vec[np.argmax(v2)], np.max(v2)
-    print(f'{spect_name:20} & {rmax1:6.2f} & {snrmax1:6.2f} & {rmax2:6.2f} & {snrmax2:6.2f}   \\\\' )
-    
+    ## ONE TABLE
+    for dect_id in dect_specs:
+        spect_name = dect_id.replace('_', '-')
+        
+        v1 = data_mat1[dect_id][0]
+        rmax1, snrmax1 = r_vec[np.argmax(v1)], np.max(v1)
+        
+        v2 = data_mat2[dect_id][0]
+        rmax2, snrmax2 = r_vec[np.argmax(v2)], np.max(v2)
+        print(f'{spect_name:20} & {rmax1:6.2f} & {snrmax1:6.2f} & {rmax2:6.2f} & {snrmax2:6.2f}   \\\\' )
+        
 
 #%% ######################### PLOT 1 :  OPTIMAL DOSE as FUNC OF TBONE
-
-rmax_dect1_mat1 = r_vec[np.argmax(data_mat1[dect_id1], axis=1)]
-rmax_dect1_mat2 = r_vec[np.argmax(data_mat2[dect_id1], axis=1)]
-rmax_dect2_mat1 = r_vec[np.argmax(data_mat1[dect_id2], axis=1)]
-rmax_dect2_mat2 = r_vec[np.argmax(data_mat2[dect_id2], axis=1)]
-
-fig, ax = plt.subplots(1,1, figsize=[6,4])
-ax.set_xticks(t_bones)
-ax.set_ylim(0,1)
-ax.set_ylabel('optimal dose to spec1 (spec2 = 80kV)' )
-ax.set_xlabel('$t_\mathrm{bone}$ [cm]')
-ax.plot(t_bones, rmax_dect1_mat1, color='b', label='detunedMV / tissue')
-ax.plot(t_bones, rmax_dect1_mat2, color='r', label='detunedMV / bone')
-ax.plot(t_bones, rmax_dect2_mat1, color='b', ls='--', label='140kV / tissue')
-ax.plot(t_bones, rmax_dect2_mat2, color='r', ls='--', label='140kV / bone')
-ax.legend(title=bf('spec1 / basis material'))
-fig.tight_layout()
-if savefig:
-    plt.savefig(figd+'plot1_dose_v_tbone.pdf')
-plt.show()
+    
+    rmax_dect1_mat1 = r_vec[np.argmax(data_mat1[dect_id1], axis=1)]
+    rmax_dect1_mat2 = r_vec[np.argmax(data_mat2[dect_id1], axis=1)]
+    rmax_dect2_mat1 = r_vec[np.argmax(data_mat1[dect_id2], axis=1)]
+    rmax_dect2_mat2 = r_vec[np.argmax(data_mat2[dect_id2], axis=1)]
+    
+    fig, ax = plt.subplots(1,1, figsize=[6,4])
+    ax.set_xticks(t_bones)
+    ax.set_ylim(0,1)
+    ax.set_ylabel('optimal dose to spec1 (spec2 = 80kV)' )
+    ax.set_xlabel('$t_\mathrm{bone}$ [cm]')
+    ax.plot(t_bones, rmax_dect1_mat1, color='b', label='detunedMV / tissue')
+    ax.plot(t_bones, rmax_dect1_mat2, color='r', label='detunedMV / bone')
+    ax.plot(t_bones, rmax_dect2_mat1, color='b', ls='--', label='140kV / tissue')
+    ax.plot(t_bones, rmax_dect2_mat2, color='r', ls='--', label='140kV / bone')
+    ax.legend(title=bf('spec1 / basis material'))
+    fig.tight_layout()
+    if savefig:
+        plt.savefig(figd+'plot1_dose_v_tbone.pdf')
+    plt.show()
         
         
 #%% ########################## PLOT 2 :  SNRmax as FUNC OF TBONE
-color = True
+    color = True
+    
+    ### get data
+    snrmax_dect1_mat1 = np.max(data_mat1[dect_id1], axis=1)
+    snrmax_dect1_mat2 = np.max(data_mat2[dect_id1], axis=1)
+    snrmax_dect2_mat1 = np.max(data_mat1[dect_id2], axis=1)
+    snrmax_dect2_mat2 = np.max(data_mat2[dect_id2], axis=1)
+    
+    ### plot
+    fig, ax_left = plt.subplots(1,1, figsize=[6,4])
+    ax = ax_left.twinx()
+    fname = 'plot2_snrmax_v_tbone_bw.pdf'
+    if color:
+        fname = fname.replace('bw','color')
+        c1, c2 = 'rb'
+        for i, spine in enumerate(ax.spines.values()):
+            spine.set_edgecolor([c1,c2,'k','k'][i])
+    else:
+        c1, c2 = 'kk'
+    
+    ax_left.set_xticks(t_bones)
+    ax_left.set_xlabel('$t_\mathrm{bone}$ [cm]')
+    
+    # mat 1, tissue
+    ax_left.set_ylabel('max SNR (tissue)' )
+    ax_left.plot(t_bones, snrmax_dect2_mat1, c=c1, marker='s', markerfacecolor='None', label='kV-kV')
+    ax_left.plot(t_bones, snrmax_dect1_mat1, c=c1, marker='o', markerfacecolor='None', label='MV-kV')
+    
+    # mat 2, bone    
+    ax.set_ylabel('max SNR (bone)')#, rotation=-90 )
+    ax.plot(t_bones, snrmax_dect2_mat2, ls=':', c=c2, marker='s', markerfacecolor='None', label='kV-kV')
+    ax.plot(t_bones, snrmax_dect1_mat2, ls=':', c=c2, marker='o', markerfacecolor='None', label='MV-kV')
+    
+    ax_left.legend(title=bf('tissue'),loc='lower left')
+    ax.legend(title=bf('bone'), loc='upper right')
 
-### get data
-snrmax_dect1_mat1 = np.max(data_mat1[dect_id1], axis=1)
-snrmax_dect1_mat2 = np.max(data_mat2[dect_id1], axis=1)
-snrmax_dect2_mat1 = np.max(data_mat1[dect_id2], axis=1)
-snrmax_dect2_mat2 = np.max(data_mat2[dect_id2], axis=1)
-
-### plot
-fig, ax_left = plt.subplots(1,1, figsize=[6,4])
-ax = ax_left.twinx()
-fname = 'plot2_snrmax_v_tbone_bw.pdf'
-if color:
-    fname = fname.replace('bw','color')
-    c1, c2 = 'rb'
-    for i, spine in enumerate(ax.spines.values()):
-        spine.set_edgecolor([c1,c2,'k','k'][i])
-else:
-    c1, c2 = 'kk'
-
-ax_left.set_xticks(t_bones)
-ax_left.set_xlabel('$t_\mathrm{bone}$ [cm]')
-
-# mat 1, tissue
-ax_left.set_ylabel('max SNR (tissue)' )
-ax_left.plot(t_bones, snrmax_dect2_mat1, c=c1, marker='s', markerfacecolor='None', label='kV-kV')
-ax_left.plot(t_bones, snrmax_dect1_mat1, c=c1, marker='o', markerfacecolor='None', label='MV-kV')
-
-# mat 2, bone    
-ax.set_ylabel('max SNR (bone)')#, rotation=-90 )
-ax.plot(t_bones, snrmax_dect2_mat2, ls=':', c=c2, marker='s', markerfacecolor='None', label='kV-kV')
-ax.plot(t_bones, snrmax_dect1_mat2, ls=':', c=c2, marker='o', markerfacecolor='None', label='MV-kV')
-
-ax_left.legend(title=bf('tissue'),loc='lower left')
-ax.legend(title=bf('bone'), loc='upper right')
-
-# align ticks
-# this is somewhat manual, make sure ylims are integer multiples of Nvals
-ax.set_ylim(0, 20)
-ax_left.set_ylim(0,160)
-Nvals = 5
-ax_left.set_yticks(np.linspace(0, ax_left.get_ybound()[1], Nvals))
-ax.set_yticks(np.linspace(0, ax.get_ybound()[1], Nvals))
-
-if color:
-    ax_left.yaxis.label.set_color(c1)
-    ax.yaxis.label.set_color(c2)
-    ax_left.tick_params(axis='y', colors=c1)
-    ax.tick_params(axis='y', colors=c2)
-
-fig.tight_layout()
-
-if savefig:
-    plt.savefig(figd + fname)
-plt.show()
+    # align ticks
+    # this is somewhat manual, make sure ylims are integer multiples of Nvals
+    ax.set_ylim(0, 20)
+    ax_left.set_ylim(0,160)
+    Nvals = 5
+    ax_left.set_yticks(np.linspace(0, ax_left.get_ybound()[1], Nvals))
+    ax.set_yticks(np.linspace(0, ax.get_ybound()[1], Nvals))
+    
+    if color:
+        ax_left.yaxis.label.set_color(c1)
+        ax.yaxis.label.set_color(c2)
+        ax_left.tick_params(axis='y', colors=c1)
+        ax.tick_params(axis='y', colors=c2)
+    
+    fig.tight_layout()
+    
+    if savefig:
+        plt.savefig(figd + fname)
+    plt.show()
 
 
 #%% ########################### PLOT 3 :  DOSE DISTRIBUTION for x-cm bone
 
-for i, data_mat in enumerate([data_mat1, data_mat2]):
-    mat_id = ['tissue','bone'][i]
-    col = ['b', 'r'][i]
-    fig, ax = plt.subplots(1,2, figsize=[7,3], sharey=False)
-    #ax[0].set_title(bf('detunedMV-80kV'))
-    #ax[1].set_title(bf('140kV-80kV'))
-    ax[0].set_title('detunedMV-80kV')
-    ax[1].set_title('140kV-80kV')
+    for i, data_mat in enumerate([data_mat1, data_mat2]):
+        mat_id = ['tissue','bone'][i]
+        col = ['b', 'r'][i]
+        fig, ax = plt.subplots(1,2, figsize=[7,3], sharey=False)
+        #ax[0].set_title(bf('detunedMV-80kV'))
+        #ax[1].set_title(bf('140kV-80kV'))
+        ax[0].set_title('detunedMV-80kV')
+        ax[1].set_title('140kV-80kV')
+        
+        ax[0].set_ylabel(f'{mat_id} SNR')
     
-    ax[0].set_ylabel(f'{mat_id} SNR')
-
-    for j, cm in enumerate([1, 4, 6]):   # index = 1 - cm
-        snr_spec1 = data_mat[dect_id1][cm-1]
-        snr_spec2 = data_mat[dect_id2][cm-1]
-        rmax1 = r_vec[np.argmax(snr_spec1)]
-        rmax2 = r_vec[np.argmax(snr_spec2)]
-        print(mat_id, cm, rmax1, rmax2)
+        for j, cm in enumerate([1, 4, 6]):   # index = 1 - cm
+            snr_spec1 = data_mat[dect_id1][cm-1]
+            snr_spec2 = data_mat[dect_id2][cm-1]
+            rmax1 = r_vec[np.argmax(snr_spec1)]
+            rmax2 = r_vec[np.argmax(snr_spec2)]
+            print(mat_id, cm, rmax1, rmax2)
+            
+            ls = ['-','--',':'][j]
+            
+            ax[0].plot(r_vec, snr_spec1, ls, color='k', label=f'{cm} cm')
+            ax[1].plot(r_vec, snr_spec2, ls, color='k', label=f'{cm} cm')
+            
+            ax[0].axvline(rmax1, ls=ls, color='k')
+            ax[1].axvline(rmax2, ls=ls, color='k')
+            
+        ax[1].legend(loc='upper right', title='$t_{bone}$')
+            
+        for axi in ax:
+            axi.set_ylim(0, None)
+            axi.set_xlim(0,1)
+            axi.set_xlabel('dose to spec1')
         
-        ls = ['-','--',':'][j]
-        
-        ax[0].plot(r_vec, snr_spec1, ls, color='k', label=f'{cm} cm')
-        ax[1].plot(r_vec, snr_spec2, ls, color='k', label=f'{cm} cm')
-        
-        ax[0].axvline(rmax1, ls=ls, color='k')
-        ax[1].axvline(rmax2, ls=ls, color='k')
-        
-    ax[1].legend(loc='upper right', title='$t_{bone}$')
-        
-    for axi in ax:
-        axi.set_ylim(0, None)
-        axi.set_xlim(0,1)
-        axi.set_xlabel('dose to spec1')
-    
-    label_panels(ax)
-    fig.tight_layout()
-    if savefig:
-        plt.savefig(figd+f'plot3c_snr_v_dose_multi_mat{i+1}.pdf')
-    plt.show()
+        label_panels(ax)
+        fig.tight_layout()
+        if savefig:
+            plt.savefig(figd+f'plot3c_snr_v_dose_multi_mat{i+1}.pdf')
+        plt.show()
 
 
 #%% ########################### PLOT 4 :  HEATMAP OF SNR
-
-t_bones_s = np.arange(1,11,1).astype(str)
-mat1 = np.zeros([len(dect_specs),len(t_bones_s)])
-mat2 = np.zeros([len(dect_specs),len(t_bones_s)])
-
-for i, spec in enumerate(dect_specs):
-    mat1[i] = np.max(data_mat1[spec], axis=1)
-    mat2[i] = np.max(data_mat2[spec], axis=1)
     
-for basismat, mat, kwargs in [['tissue',mat1, {'vmin':0, 'vmax':100}]
-                      , ['bone',mat2, {'vmin':0, 'vmax': 14}]]:
-    fig, ax = plt.subplots(1, 1, figsize=[6.5,3.8])
-    ax.grid(False)
-    ax.tick_params(direction="out")
-    ax.xaxis.set_ticks_position('top') 
-    ax.yaxis.set_ticks_position('left') 
+    t_bones_s = np.arange(1,11,1).astype(str)
+    mat1 = np.zeros([len(dect_specs),len(t_bones_s)])
+    mat2 = np.zeros([len(dect_specs),len(t_bones_s)])
     
-    im, cbar = heatmap(mat, dect_specs, t_bones_s, ax=ax,
-                        cmap="coolwarm", cbarlabel=f"{basismat} SNR", 
-                        cbar_kw={'pad':0.02}, **kwargs)
-    texts = annotate_heatmap(im, valfmt="{x:.1f}", textcolors=('black','black'))
-    ax.set_title('bone thickness [cm]', fontsize=10)
-    fig.tight_layout()
-    if savefig:
-        plt.savefig(figd+f'plot4_heatmap_snr_v_tbone_{basismat}.pdf')
-    plt.show()
-
+    for i, spec in enumerate(dect_specs):
+        mat1[i] = np.max(data_mat1[spec], axis=1)
+        mat2[i] = np.max(data_mat2[spec], axis=1)
+        
+    for basismat, mat, kwargs in [['tissue',mat1, {'vmin':0, 'vmax':100}]
+                          , ['bone',mat2, {'vmin':0, 'vmax': 14}]]:
+        fig, ax = plt.subplots(1, 1, figsize=[6.5,3.8])
+        ax.grid(False)
+        ax.tick_params(direction="out")
+        ax.xaxis.set_ticks_position('top') 
+        ax.yaxis.set_ticks_position('left') 
+        
+        im, cbar = heatmap(mat, dect_specs, t_bones_s, ax=ax,
+                            cmap="coolwarm", cbarlabel=f"{basismat} SNR", 
+                            cbar_kw={'pad':0.02}, **kwargs)
+        texts = annotate_heatmap(im, valfmt="{x:.1f}", textcolors=('black','black'))
+        ax.set_title('bone thickness [cm]', fontsize=10)
+        fig.tight_layout()
+        if savefig:
+            plt.savefig(figd+f'plot4_heatmap_snr_v_tbone_{basismat}.pdf')
+        plt.show()
+    
 
 
 
 #%% ###################### PLOT 5 : SPECTRA
-
-spec_dir = './input/spectrum/'
-dose_target = 1e-6
-dose_spec = 1e-3
-import sys
-sys.path.append('xtomosim')  # for xtomosim
-from xtomosim.system import xRaySpectrum
-spec_names = [x.name for x in specs]
-
-specs = []
-for name in spec_names:
-    file = f'{spec_dir}/{name}_1mGy_float32.bin'  
-    spec = xRaySpectrum(file, name)
-    spec.rescale_counts(dose_target / dose_spec )
-    specs.append(spec)
+    
+    spec_dir = './input/spectrum/'
+    dose_target = 1e-6
+    dose_spec = 1e-3
+    import sys
+    sys.path.append('xtomosim')  # for xtomosim
+    from xtomosim.system import xRaySpectrum
+    spec_names = [x.name for x in specs]
+    
+    specs = []
+    for name in spec_names:
+        file = f'{spec_dir}/{name}_1mGy_float32.bin'  
+        spec = xRaySpectrum(file, name)
+        spec.rescale_counts(dose_target / dose_spec )
+        specs.append(spec)
+        
+        
+    lss = ['-','--','-',':','--']
+    colors = ['k','k','k','k','k']  # black
+    tlw = 1
+    
+    fig,ax=plt.subplots(1, 2, figsize=[7, 3])
+    ax[0].set_ylabel('$1 \\mu Gy$-scaled counts')
+    
+    ax[0].set_title('kV spectra')
+    ax[0].set_xlabel('energy [keV]')
+    ax[0].ticklabel_format(axis="y", style="sci", scilimits=(0, 0))
+    
+    ax[1].set_title('MV spectra')
+    ax[1].set_xlim(0,6)
+    ax[1].set_xlabel('energy [MeV]')
     
     
-lss = ['-','--','-',':','--']
-colors = ['k','k','k','k','k']  # black
-tlw = 1
-
-fig,ax=plt.subplots(1, 2, figsize=[7, 3])
-ax[0].set_ylabel('$1 \\mu Gy$-scaled counts')
-
-ax[0].set_title('kV spectra')
-ax[0].set_xlabel('energy [keV]')
-ax[0].ticklabel_format(axis="y", style="sci", scilimits=(0, 0))
-
-ax[1].set_title('MV spectra')
-ax[1].set_xlim(0,6)
-ax[1].set_xlabel('energy [MeV]')
-
-
-for j,spec in enumerate(specs):
-    if 'MV' in spec.filename:
-        ax[1].plot(spec.E/1000, spec.I0,  lw=tlw, ls=lss[j], color=colors[j], label=spec.name)
+    for j,spec in enumerate(specs):
+        if 'MV' in spec.filename:
+            ax[1].plot(spec.E/1000, spec.I0,  lw=tlw, ls=lss[j], color=colors[j], label=spec.name)
+        else:
+            ax[0].plot(spec.E, spec.I0, lw=tlw, ls=lss[j], color=colors[j], label=spec.name)
+            
+    ax[0].legend(loc='upper right')
+    ax[1].legend(loc='upper right')
+            
+    label_panels(ax, dx=0.05)
+    
+    fig.tight_layout()
+    if savefig:
+        plt.savefig( figd + 'spectra.pdf' )
+    plt.show()
+    
+    
+    
+    
+    #%% ######## Detector efficiency, eta vs. E
+    
+    fig,ax=plt.subplots(1, 1, figsize=[4, 3])
+    ax.plot(detector.E, detector.eta, 'k-')
+    ax.set_xlabel('energy [keV]')
+    ax.set_ylabel('detective efficiency')
+    ax.set_ylim(0, None)
+    fig.tight_layout()
+    if savefig:
+        plt.savefig( figd + 'detector_eta.pdf')
+    plt.show()
+    
+    
+    
+    
+    #%% Revision 1 new figure : MV-kV SNRmax vs TBONE with various detector efficiencies 
+    
+    # # effective energy of one spectrum?
+    # dspec = specs[1]  # detunedMV
+    # eta_interp = np.interp(dspec.E, detector.E, detector.eta)
+    # eta_eff = np.sum(eta_interp*dspec.I0/np.sum(dspec.I0))
+    # print(dspec.name, f'effective efficiency = {eta_eff:.5f}')
+    
+    color = True
+    dect_id = 'detunedMV_80kV'  # just one spec combo for this
+    eta_vals = [0.05, 0.10, 0.20]
+    lss = ['-', '--', ':']
+    
+    fig, ax_left = plt.subplots(1,1, figsize=[6,4])
+    ax = ax_left.twinx()
+    fname = 'plot2_snrmax_v_tbone_bw.pdf'
+    if color:
+        fname = fname.replace('bw','color')
+        c1, c2 = 'rb'
+        for i, spine in enumerate(ax.spines.values()):
+            spine.set_edgecolor([c1,c2,'k','k'][i])
     else:
-        ax[0].plot(spec.E, spec.I0, lw=tlw, ls=lss[j], color=colors[j], label=spec.name)
+        c1, c2 = 'kk'
+    
+    # ax_left : mat1 (tissue)
+    ax_left.set_xticks(t_bones)
+    ax_left.set_xlabel('$t_\mathrm{bone}$ [cm]')
+    ax_left.set_ylabel('max SNR (tissue)' )
+    
+    # ax : mat2 (bone)
+    ax.set_ylabel('max SNR (bone)')
+    
+    # plot a line for each constant eta
+    for e, eta in enumerate(eta_vals):
+        run_id_eta = run_id + f'_{int(100*eta):03}eta'
+        outd_eta = f'./output/{run_id_eta}/'
+    
+        # load the data (not pre-loaded into the dictionaries above!)
+        data_array_mat1 = np.zeros([len(t_bones), len(r_vec)], dtype=np.float64)
+        data_array_mat2 = np.zeros([len(t_bones), len(r_vec)], dtype=np.float64)
+        for i, t_2 in enumerate(t_bones):
+            fname1 = outd_eta + dect_id + f'/mat1_{int(t_1):02}tiss_{int(t_2):02}bone.bin'
+            fname2 = outd_eta + dect_id + f'/mat2_{int(t_1):02}tiss_{int(t_2):02}bone.bin'
+            data_array_mat1[i,:] = np.fromfile(fname1, dtype=np.float64)
+            data_array_mat2[i,:] = np.fromfile(fname2, dtype=np.float64)
+        snrmax1 = np.max(data_array_mat1, axis=1)
+        snrmax2 = np.max(data_array_mat2, axis=1)
         
-ax[0].legend(loc='upper right')
-ax[1].legend(loc='upper right')
-        
-label_panels(ax, dx=0.05)
-
-fig.tight_layout()
-if savefig:
-    plt.savefig( figd + 'spectra.pdf' )
-plt.show()
-
-
-
-
-#%% ######## Detector efficiency, eta vs. E
-
-fig,ax=plt.subplots(1, 1, figsize=[4, 3])
-ax.plot(detector.E, detector.eta, 'k-')
-ax.set_xlabel('energy [keV]')
-ax.set_ylabel('detective efficiency')
-ax.set_ylim(0, None)
-fig.tight_layout()
-if savefig:
-    plt.savefig( figd + 'detector_eta.pdf')
-plt.show()
-
-
-
-
-#%% Revision 1 new figure : MV-kV SNRmax vs TBONE with various detector efficiencies 
-
-# # effective energy of one spectrum?
-# dspec = specs[1]  # detunedMV
-# eta_interp = np.interp(dspec.E, detector.E, detector.eta)
-# eta_eff = np.sum(eta_interp*dspec.I0/np.sum(dspec.I0))
-# print(dspec.name, f'effective efficiency = {eta_eff:.5f}')
-
-color = True
-dect_id = 'detunedMV_80kV'  # just one spec combo for this
-eta_vals = [0.05, 0.10, 0.20]
-lss = ['-', '--', ':']
-
-fig, ax_left = plt.subplots(1,1, figsize=[6,4])
-ax = ax_left.twinx()
-fname = 'plot2_snrmax_v_tbone_bw.pdf'
-if color:
-    fname = fname.replace('bw','color')
-    c1, c2 = 'rb'
-    for i, spine in enumerate(ax.spines.values()):
-        spine.set_edgecolor([c1,c2,'k','k'][i])
-else:
-    c1, c2 = 'kk'
-
-# ax_left : mat1 (tissue)
-ax_left.set_xticks(t_bones)
-ax_left.set_xlabel('$t_\mathrm{bone}$ [cm]')
-ax_left.set_ylabel('max SNR (tissue)' )
-
-# ax : mat2 (bone)
-ax.set_ylabel('max SNR (bone)')
-
-# plot a line for each constant eta
-for e, eta in enumerate(eta_vals):
-    run_id_eta = run_id + f'_{int(100*eta):03}eta'
-    outd_eta = f'./output/{run_id_eta}/'
-
-    # load the data (not pre-loaded into the dictionaries above!)
-    data_array_mat1 = np.zeros([len(t_bones), len(r_vec)], dtype=np.float64)
-    data_array_mat2 = np.zeros([len(t_bones), len(r_vec)], dtype=np.float64)
-    for i, t_2 in enumerate(t_bones):
+        # plot the data
+        ax_left.plot(t_bones, snrmax1, ls=lss[e], c=c1, marker='', markerfacecolor='None', label=f'{int(100*eta)}\%')
+        ax.plot(t_bones, snrmax2,      ls=lss[e], c=c2, marker='', markerfacecolor='None', label=f'{int(100*eta)}\%')
+    
+    
+    # align ticks
+    # this is somewhat manual, make sure ylims are integer multiples of Nvals
+    ax_left.set_ylim(0,60)
+    ax.set_ylim(0, 10)
+    Nvals = 6
+    ax_left.set_yticks(np.linspace(0, ax_left.get_ybound()[1], Nvals))
+    ax.set_yticks(np.linspace(0, ax.get_ybound()[1], Nvals))
+    
+    if color:
+        ax_left.yaxis.label.set_color(c1)
+        ax.yaxis.label.set_color(c2)
+        ax_left.tick_params(axis='y', colors=c1)
+        ax.tick_params(axis='y', colors=c2)
+    
+    legend_left = ax_left.legend(title=bf('tissue'), loc='upper left', framealpha=1)
+    ax.legend(title=bf('bone'), loc='upper right', framealpha=1)
+    
+    fig.tight_layout()
+    if savefig:
+        plt.savefig(figd + 'r1_plot1_mvkv_snr_v_bone_etas.pdf')
+    plt.show()
+    
+    
+    
+    #%%  Revision 1 new figure : optimal dose vs. eta (for given tbone)
+    
+    t_2 = 1  # single bone thickness
+    eta_vals = np.arange(0.01, 1.0, 0.01)
+    
+    data_array_mat1 = np.zeros([len(eta_vals), len(r_vec)], dtype=np.float64)
+    data_array_mat2 = np.zeros([len(eta_vals), len(r_vec)], dtype=np.float64)
+    for i, eta in enumerate(eta_vals):
+        outd_eta = f'./output/{run_id}_{int(100*eta):03}eta/'
         fname1 = outd_eta + dect_id + f'/mat1_{int(t_1):02}tiss_{int(t_2):02}bone.bin'
         fname2 = outd_eta + dect_id + f'/mat2_{int(t_1):02}tiss_{int(t_2):02}bone.bin'
         data_array_mat1[i,:] = np.fromfile(fname1, dtype=np.float64)
         data_array_mat2[i,:] = np.fromfile(fname2, dtype=np.float64)
-    snrmax1 = np.max(data_array_mat1, axis=1)
-    snrmax2 = np.max(data_array_mat2, axis=1)
+    rmax_mat1 = r_vec[np.argmax(data_array_mat1, axis=1)]
+    rmax_mat2 = r_vec[np.argmax(data_array_mat2, axis=1)]
     
-    # plot the data
-    ax_left.plot(t_bones, snrmax1, ls=lss[e], c=c1, marker='', markerfacecolor='None', label=f'{int(100*eta)}\%')
-    ax.plot(t_bones, snrmax2,      ls=lss[e], c=c2, marker='', markerfacecolor='None', label=f'{int(100*eta)}\%')
-
-
-# align ticks
-# this is somewhat manual, make sure ylims are integer multiples of Nvals
-ax_left.set_ylim(0,60)
-ax.set_ylim(0, 10)
-Nvals = 6
-ax_left.set_yticks(np.linspace(0, ax_left.get_ybound()[1], Nvals))
-ax.set_yticks(np.linspace(0, ax.get_ybound()[1], Nvals))
-
-if color:
-    ax_left.yaxis.label.set_color(c1)
-    ax.yaxis.label.set_color(c2)
-    ax_left.tick_params(axis='y', colors=c1)
-    ax.tick_params(axis='y', colors=c2)
-
-legend_left = ax_left.legend(title=bf('tissue'), loc='upper left', framealpha=1)
-ax.legend(title=bf('bone'), loc='upper right', framealpha=1)
-
-fig.tight_layout()
-if savefig:
-    plt.savefig(figd + 'r1_plot1_mvkv_snr_v_bone_etas.pdf')
-plt.show()
-
-
-
-#%%  Revision 1 new figure : optimal dose vs. eta (for given tbone)
-
-t_2 = 1  # single bone thickness
-eta_vals = np.arange(0.01, 1.0, 0.01)
-
-data_array_mat1 = np.zeros([len(eta_vals), len(r_vec)], dtype=np.float64)
-data_array_mat2 = np.zeros([len(eta_vals), len(r_vec)], dtype=np.float64)
-for i, eta in enumerate(eta_vals):
-    outd_eta = f'./output/{run_id}_{int(100*eta):03}eta/'
-    fname1 = outd_eta + dect_id + f'/mat1_{int(t_1):02}tiss_{int(t_2):02}bone.bin'
-    fname2 = outd_eta + dect_id + f'/mat2_{int(t_1):02}tiss_{int(t_2):02}bone.bin'
-    data_array_mat1[i,:] = np.fromfile(fname1, dtype=np.float64)
-    data_array_mat2[i,:] = np.fromfile(fname2, dtype=np.float64)
-rmax_mat1 = r_vec[np.argmax(data_array_mat1, axis=1)]
-rmax_mat2 = r_vec[np.argmax(data_array_mat2, axis=1)]
-
-fig, ax = plt.subplots(1,1, figsize=[5,3])
-ax.plot(eta_vals, rmax_mat1, color='b', label='tissue')
-ax.plot(eta_vals, rmax_mat2, color='r', label='bone')
-ax.set_ylim(0,1)
-ax.set_ylabel('optimal dose to detunedMV' )
-ax.set_xlabel('detective efficiency $\eta$')
-ax.legend()
-fig.tight_layout()
-if savefig:
-    plt.savefig(figd_r1+f'r1_plot2_mvkv_dose_v_eta_{int(t_2):02}bone.pdf')
-plt.show()
-        
-
-#%% Revision 1 new figure : SNRmax vs eta for given (t_tiss, t_bone) -- r is optimized
-
-
-
-t_2 = 9 # single bone thickness
-eta_vals = np.arange(0.01, 1.0, 0.01)
-eta_vals = np.delete(eta_vals, 5)  # error here, re run later
-
-data_array_mat1 = np.zeros([len(eta_vals), len(r_vec)], dtype=np.float64)
-data_array_mat2 = np.zeros([len(eta_vals), len(r_vec)], dtype=np.float64)
-for i, eta in enumerate(eta_vals):
-    outd_eta = f'./output/{run_id}_{int(100*eta):03}eta/'
-    fname1 = outd_eta + dect_id + f'/mat1_{int(t_1):02}tiss_{int(t_2):02}bone.bin'
-    fname2 = outd_eta + dect_id + f'/mat2_{int(t_1):02}tiss_{int(t_2):02}bone.bin'
-    data_array_mat1[i,:] = np.fromfile(fname1, dtype=np.float64)
-    data_array_mat2[i,:] = np.fromfile(fname2, dtype=np.float64)
-SNRmax_mat1 = np.max(data_array_mat1, axis=1)
-SNRmax_mat2 = np.max(data_array_mat2, axis=1)
-
-fig, ax = plt.subplots(1,1, figsize=[5,3])
-# ax.plot(eta_vals, SNRmax_mat1, color='b', label='tissue')
-# ax.plot(eta_vals, SNRmax_mat2, color='r', label='bone')
-#ax.set_ylim(0,1)
-lw = 1.5
-ax.plot(eta_vals, SNRmax_mat1/np.max(SNRmax_mat1), color='b', lw=lw, label=f'tissue, max SNR($\eta$) = {np.max(SNRmax_mat1):.1f}')
-ax.plot(eta_vals, SNRmax_mat2/np.max(SNRmax_mat2), 'r--', lw=lw+0.5, label=f'bone, max SNR($\eta$) = {np.max(SNRmax_mat2):.1f}')
-ax.plot(eta_vals, np.sqrt(eta_vals), 'k:', lw=lw+1, label='theoretical SNR($\eta$) = $\sqrt{\eta}$')
-
-ax.set_ylabel('Normalized dose-optimized SNR($\eta$)' )
-ax.set_xlabel('detective efficiency $\eta$')
-ax.legend()
-fig.tight_layout()
-#if savefig:
-plt.savefig(figd_r1+f'r1_plot2_mvkv_SNR_v_eta_{int(t_2):02}bone.pdf')
-plt.show()
-        
-
-        
-        
-#%% Revision 1 new figure : SNR vs eta for given (t_tiss, t_bone, r)
-
-t_2 = 1  # single bone thickness
-r_vals = [0.5, 0.7, 0.9]
-eta_vals = np.arange(0.01, 1.0, 0.01)
-# eta_vals = np.delete(eta_vals, 5)  # error here
-
-data_array_mat1 = np.zeros([len(eta_vals), len(r_vec)], dtype=np.float64)
-data_array_mat2 = np.zeros([len(eta_vals), len(r_vec)], dtype=np.float64)
-for i, eta in enumerate(eta_vals):
-    outd_eta = f'./output/{run_id}_{int(100*eta):03}eta/'
-    fname1 = outd_eta + dect_id + f'/mat1_{int(t_1):02}tiss_{int(t_2):02}bone.bin'
-    fname2 = outd_eta + dect_id + f'/mat2_{int(t_1):02}tiss_{int(t_2):02}bone.bin'
-    data_array_mat1[i,:] = np.fromfile(fname1, dtype=np.float64)
-    data_array_mat2[i,:] = np.fromfile(fname2, dtype=np.float64)
-    #%%
-fig, ax = plt.subplots(1,1, figsize=[5,3])
-for i, r in enumerate(r_vals):
-    ind_r = int(100*r) - 1  #list(r_vec).index(r)
-    data_mat1 = data_array_mat1[:,ind_r] * np.sqrt(eta_vals)
-    data_mat2 = data_array_mat2[:,ind_r]  * np.sqrt(eta_vals)
+    fig, ax = plt.subplots(1,1, figsize=[5,3])
+    ax.plot(eta_vals, rmax_mat1, color='b', label='tissue')
+    ax.plot(eta_vals, rmax_mat2, color='r', label='bone')
+    ax.set_ylim(0,1)
+    ax.set_ylabel('optimal dose to detunedMV' )
+    ax.set_xlabel('detective efficiency $\eta$')
+    ax.legend()
+    fig.tight_layout()
+    if savefig:
+        plt.savefig(figd_r1+f'r1_plot2_mvkv_dose_v_eta_{int(t_2):02}bone.pdf')
+    plt.show()
+            
     
-    #x.plot(eta_vals, data_mat1, color='b', label=r)
-    ax.plot(eta_vals, data_mat2, label=r)
-
-ax.set_ylabel('SNR for given allocation $r$' )
-ax.set_xlabel('detective efficiency $\eta$')
-ax.legend()
-fig.tight_layout()
-if savefig:
-    plt.savefig(figd_r1+f'r1_plot2_mvkv_snr_v_eta_{int(t_2):02}bone.pdf')
-plt.show()
+    #%% Revision 1 new figure : SNRmax vs eta for given (t_tiss, t_bone) -- r is optimized
     
-
-
-
-
-
+    
+    
+    t_2 = 9 # single bone thickness
+    eta_vals = np.arange(0.01, 1.0, 0.01)
+    eta_vals = np.delete(eta_vals, 5)  # error here, re run later
+    
+    data_array_mat1 = np.zeros([len(eta_vals), len(r_vec)], dtype=np.float64)
+    data_array_mat2 = np.zeros([len(eta_vals), len(r_vec)], dtype=np.float64)
+    for i, eta in enumerate(eta_vals):
+        outd_eta = f'./output/{run_id}_{int(100*eta):03}eta/'
+        fname1 = outd_eta + dect_id + f'/mat1_{int(t_1):02}tiss_{int(t_2):02}bone.bin'
+        fname2 = outd_eta + dect_id + f'/mat2_{int(t_1):02}tiss_{int(t_2):02}bone.bin'
+        data_array_mat1[i,:] = np.fromfile(fname1, dtype=np.float64)
+        data_array_mat2[i,:] = np.fromfile(fname2, dtype=np.float64)
+    SNRmax_mat1 = np.max(data_array_mat1, axis=1)
+    SNRmax_mat2 = np.max(data_array_mat2, axis=1)
+    
+    fig, ax = plt.subplots(1,1, figsize=[5,3])
+    # ax.plot(eta_vals, SNRmax_mat1, color='b', label='tissue')
+    # ax.plot(eta_vals, SNRmax_mat2, color='r', label='bone')
+    #ax.set_ylim(0,1)
+    lw = 1.5
+    ax.plot(eta_vals, SNRmax_mat1/np.max(SNRmax_mat1), color='b', lw=lw, label=f'tissue, max SNR($\eta$) = {np.max(SNRmax_mat1):.1f}')
+    ax.plot(eta_vals, SNRmax_mat2/np.max(SNRmax_mat2), 'r--', lw=lw+0.5, label=f'bone, max SNR($\eta$) = {np.max(SNRmax_mat2):.1f}')
+    ax.plot(eta_vals, np.sqrt(eta_vals), 'k:', lw=lw+1, label='theoretical SNR($\eta$) = $\sqrt{\eta}$')
+    
+    ax.set_ylabel('Normalized dose-optimized SNR($\eta$)' )
+    ax.set_xlabel('detective efficiency $\eta$')
+    ax.legend()
+    fig.tight_layout()
+    #if savefig:
+    plt.savefig(figd_r1+f'r1_plot2_mvkv_SNR_v_eta_{int(t_2):02}bone.pdf')
+    plt.show()
+            
+    
+            
+            
+    #%% Revision 1 new figure : SNR vs eta for given (t_tiss, t_bone, r)
+    
+    t_2 = 1  # single bone thickness
+    r_vals = [0.5, 0.7, 0.9]
+    eta_vals = np.arange(0.01, 1.0, 0.01)
+    # eta_vals = np.delete(eta_vals, 5)  # error here
+    
+    data_array_mat1 = np.zeros([len(eta_vals), len(r_vec)], dtype=np.float64)
+    data_array_mat2 = np.zeros([len(eta_vals), len(r_vec)], dtype=np.float64)
+    for i, eta in enumerate(eta_vals):
+        outd_eta = f'./output/{run_id}_{int(100*eta):03}eta/'
+        fname1 = outd_eta + dect_id + f'/mat1_{int(t_1):02}tiss_{int(t_2):02}bone.bin'
+        fname2 = outd_eta + dect_id + f'/mat2_{int(t_1):02}tiss_{int(t_2):02}bone.bin'
+        data_array_mat1[i,:] = np.fromfile(fname1, dtype=np.float64)
+        data_array_mat2[i,:] = np.fromfile(fname2, dtype=np.float64)
+        #%%
+    fig, ax = plt.subplots(1,1, figsize=[5,3])
+    for i, r in enumerate(r_vals):
+        ind_r = int(100*r) - 1  #list(r_vec).index(r)
+        data_mat1 = data_array_mat1[:,ind_r] * np.sqrt(eta_vals)
+        data_mat2 = data_array_mat2[:,ind_r]  * np.sqrt(eta_vals)
+        
+        #x.plot(eta_vals, data_mat1, color='b', label=r)
+        ax.plot(eta_vals, data_mat2, label=r)
+    
+    ax.set_ylabel('SNR for given allocation $r$' )
+    ax.set_xlabel('detective efficiency $\eta$')
+    ax.legend()
+    fig.tight_layout()
+    if savefig:
+        plt.savefig(figd_r1+f'r1_plot2_mvkv_snr_v_eta_{int(t_2):02}bone.pdf')
+    plt.show()
+        
+    
+    
+    
+    
+    
 
 
 
