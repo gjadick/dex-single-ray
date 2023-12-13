@@ -153,10 +153,12 @@ def get_variance(source, target, detector):
     D = detector.get_detection_function(source)
     psi = detector.get_psi(source)
         
-    # variance has factor of psi**2 (one is already contained in D)
-    # also add electronic noise (default is 0)
-    v = np.trapz(psi * source.I0 * T * D , x=source.E) + detector.std_electronic**2
-
+    # compute electronic noise in units of energy [keV]
+    E_avg = np.average(source.E, weights=source.I0)
+    std_elec_keV = detector.std_electronic * E_avg
+    
+    # note, variance has factor of psi**2 (one is already contained in D)
+    v = np.trapz(psi * source.I0 * T * D , x=source.E) + std_elec_keV**2
     return v
 
 

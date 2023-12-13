@@ -39,19 +39,29 @@ import matplotlib.pyplot as plt
 ###########################################################################
 ### INPUTS
 
-# run params
-dose_target = 1e-6        # [Gy]
-detector_mode = 'PCD'     # PCD/EID
-detector_eta = None      # None or float between 0 and 1 (% photons stopped)
-detector_filename = './input/detector/eta_pcd_Si_30mm.bin'   # float32 array of E, eta(E)
-#E_thresh_vec = np.arange(10, 1001, 10)  # spectral detector energy thresholds [keV]
-E_thresh_vec = np.arange(1010, 6000, 10)  # spectral detector energy thresholds [keV]
+test_plot = False
 
+# run params
+dose_target = 1e-6       # [Gy]
+detector_mode = 'EID'     # PCD/EID
+detector_eta = None       # None or float between 0 and 1 (% photons stopped)
+detector_std_e = 10      # electronic noise stdev in photons (EID only)
+if detector_mode == 'EID':
+    detector_filename = './input/detector/eta_eid_mv.bin'   # float32 array of E, eta(E)
+else:  # PCD
+    detector_filename = './input/detector/eta_pcd_Si_30mm.bin'   # float32 array of E, eta(E)
+E_thresh_vec = np.arange(10, 6000, 10)  # spectral detector energy thresholds [keV]
 
 # label the run according to the params
-run_id = f'{detector_mode}_{int(1e6*dose_target):04}uGy'
+run_id = detector_mode
+if (detector_mode=='EID') and (detector_std_e > 0):
+    run_id += f'_{int(detector_std_e):04}std'  #f'_{int(detector_std_e):09}std'
+elif detector_mode=='EID':
+    run_id += '_noiseless'
 if detector_eta is not None:
-    run_id = run_id + f'_{int(100*detector_eta):03}eta'
+    run_id += f'_{int(100*detector_eta):03}eta'
+run_id += f'_{int(1e6*dose_target):04}uGy'
+
 
 # materials (p : density [g/cm3] and t : thickness [cm])
 material_1 = 'soft_tissue'
@@ -60,12 +70,13 @@ t_1 = 40.0
 material_2 = 'bone'
 p_2 = 1.85
 t_2 = 1.0 
-t_bones = np.arange(1,11,1.0)  # range of t_2 
+#t_bones = np.arange(1,11,1.0)  # range of t_2 
+t_bones = np.arange(0.1,10.1,0.1)  # range of t_2 
 
 # spectra, ordered in descending effective energy
 spec_dir = './input/spectrum/'
 spec_names = ['6MV', 'detunedMV', '140kV', '120kV', '80kV']  # all available spectra
-spec_name1 = '6MV'
+spec_name1 = 'detunedMV'
 spec_name2 = '80kV'
 dose_spec = 1e-3  # each spec file has a dose scaled to 1 mGy (center of 40-cm water cylinder)
 
@@ -89,7 +100,8 @@ spec_b.rescale_counts(dose_target / dose_spec)  # could also use `imaging_system
 
 
 # init detector 
-detector = Detector(detector_filename, detector_mode, eta=detector_eta)
+detector = Detector(detector_filename, detector_mode, 
+                    std_electronic=detector_std_e, eta=detector_eta)
 
 
 if __name__ == '__main__':
@@ -138,21 +150,24 @@ if __name__ == '__main__':
                 SNRs_mat2[i] = SNR_mat2_r
     
             # save output
-            SNRs_mat1.astype(np.float64).tofile(outd_j + f'mat1_{int(t_1):02}tiss_{int(t_2):02}bone.bin')
-            SNRs_mat2.astype(np.float64).tofile(outd_j + f'mat2_{int(t_1):02}tiss_{int(t_2):02}bone.bin')
+            #SNRs_mat1.astype(np.float64).tofile(outd_j + f'mat1_{int(t_1):02}tiss_{int(t_2):02}bone.bin')
+            #SNRs_mat2.astype(np.float64).tofile(outd_j + f'mat2_{int(t_1):02}tiss_{int(t_2):02}bone.bin')
+            SNRs_mat1.astype(np.float64).tofile(outd_j + f'mat1_{int(t_1):02}tiss_{t_2:04.1f}bone.bin')
+            SNRs_mat2.astype(np.float64).tofile(outd_j + f'mat2_{int(t_1):02}tiss_{t_2:04.1f}bone.bin')
             
-            plt.title(f'{spec_a.name} - {t_2:.0f} cm bone')
-            plt.ylabel('SNR')
-            plt.xlabel('dose to MV spectrum')
-            plt.plot(r_vec, SNRs_mat1, 'r-', label='tissue')
-            plt.plot(r_vec, SNRs_mat2, 'k-', label='bone')
-            plt.axvline(r_vec[np.argmax(SNRs_mat1)], color='r')
-            plt.axvline(r_vec[np.argmax(SNRs_mat2)], color='k')
-            plt.legend()
-            plt.show()
+            if test_plot:
+                plt.title(f'{spec_a.name} - {t_2:.0f} cm bone')
+                plt.ylabel('SNR')
+                plt.xlabel('dose to MV spectrum')
+                plt.plot(r_vec, SNRs_mat1, 'r-', label='tissue')
+                plt.plot(r_vec, SNRs_mat2, 'k-', label='bone')
+                plt.axvline(r_vec[np.argmax(SNRs_mat1)], color='r')
+                plt.axvline(r_vec[np.argmax(SNRs_mat2)], color='k')
+                plt.legend()
+                plt.show()
 
     # 2 : MV only, SNR vs E_thresh (one bone thickness?)
-    if True:
+    if False:
         for E_thresh in E_thresh_vec:        
             spec = spec_a  # use the first spec [MV] only
             detector_low = Detector(detector_filename, detector_mode, eta=detector_eta, E_threshold_high=E_thresh)
@@ -196,21 +211,12 @@ if __name__ == '__main__':
                     SNRs_mat2[i] = SNR_mat2_r
         
                 # save output
-                SNRs_mat1.astype(np.float64).tofile(outd_j + f'mat1_{int(t_1):02}tiss_{int(t_2):02}bone.bin')
-                SNRs_mat2.astype(np.float64).tofile(outd_j + f'mat2_{int(t_1):02}tiss_{int(t_2):02}bone.bin')
-                
+                # SNRs_mat1.astype(np.float64).tofile(outd_j + f'mat1_{int(t_1):02}tiss_{int(t_2):02}bone.bin')
+                # SNRs_mat2.astype(np.float64).tofile(outd_j + f'mat2_{int(t_1):02}tiss_{int(t_2):02}bone.bin')
+                SNRs_mat1.astype(np.float64).tofile(outd_j + f'mat1_{int(t_1):02}tiss_{t_2:04.1f}bone.bin')
+                SNRs_mat2.astype(np.float64).tofile(outd_j + f'mat2_{int(t_1):02}tiss_{t_2:04.1f}bone.bin')
+                                
             
-    
-    
-# #%% test plots
-# plt.plot(r_vec, SNRs_mat1, 'r-', label=f'{t_1:.0f} cm tissue')
-# plt.plot(r_vec, SNRs_mat2, 'k-', label=f'{t_2:.0f} cm bone')
-# plt.axvline(r_vec[np.argmax(SNRs_mat1)], color='r')
-# plt.axvline(r_vec[np.argmax(SNRs_mat2)], color='k')
-# plt.legend()
-# plt.show()
-
-
 
 
 
