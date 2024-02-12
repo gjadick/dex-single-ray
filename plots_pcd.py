@@ -14,27 +14,27 @@ from xtomosim.system import xRaySpectrum
 import os
 import numpy as np
 import matplotlib.pyplot as plt
+from scipy import interpolate
 
 # define / load the parameters to use 
-from main import E_thresh_vec, r_vec, t_1, t_bones, dose_spec, \
-                 spec_name1, spec_name2, spec_dir
+from main import r_vec, t_bones, t_tissues, dose_spec, spec_dir  # , t_1
+
+matnames = ['Tissue', 'Bone']
 
 #from plots import bf, label_panels, heatmap
 dose_target = 1e-6  
-detector_std_e = 10 #886      # electronic noise, only used for EID mode
+detector_std_e = 10       # electronic noise, only used for EID mode
 
 # define data directories
-figd = 'output/figs/detcomp'
+spec_name1 = 'detunedMV' 
+#spec_name1 = '140kV'
+spec_name2 = '80kV'
+figd = f'output/figs/detcomp_{spec_name1}_{spec_name2}/'
 outd_pcd = f'output/PCD_{int(1e6*dose_target):04}uGy/'
-outd_eid_noiseless = f'output/EID_noiseless_{int(1e6*dose_target):04}uGy/' 
-if (detector_std_e > 0):
-    outd_eid =  f'output/EID_{int(detector_std_e):04}std_{int(1e6*dose_target):04}uGy/' 
-    figd += f'_{int(detector_std_e):04}std_{int(1e6*dose_target):04}uGy/'
-else:
-    outd_eid = outd_eid_noiseless
-    figd += f'_noiseless_{int(1e6*dose_target):04}uGy/'
-    
-savefig = True
+outd_eid =  f'output/EID_{int(detector_std_e):04}std_{int(1e6*dose_target):04}uGy/' 
+
+
+savefig = False
 if savefig:
     os.makedirs(figd, exist_ok=True)
     
@@ -69,10 +69,12 @@ plt.rcParams.update({
     "legend.framealpha":1.0 ,  
      })
 
-#%%
+
+# #%%
 if __name__ == '__main__':
         
     #% READ THE DATA AND STORE IN DICTIONARY
+
     
     # init spectra with scaled dose to water cylinder 
     spec_a = xRaySpectrum(f'{spec_dir}/{spec_name1}_1mGy_float32.bin', spec_name1)
@@ -80,50 +82,126 @@ if __name__ == '__main__':
     spec_a.rescale_counts(dose_target / dose_spec)  
     spec_b.rescale_counts(dose_target / dose_spec)  # could also use `imaging_system.get_water_dose()`
     
-    # Vanilla PCD : SNR vs. r for each t_bone (one spectral combo)
-    specs_id = f'{spec_a.name}_{spec_b.name}'
-    data_mat1_pcd = np.zeros([len(t_bones), len(r_vec)], dtype=np.float64)
-    data_mat2_pcd = np.zeros([len(t_bones), len(r_vec)], dtype=np.float64)
-    for i, t_2 in enumerate(t_bones):
-        fname1 = outd_pcd + specs_id + f'/mat1_{int(t_1):02}tiss_{t_2:04.1f}bone.bin'
-        fname2 = outd_pcd + specs_id + f'/mat2_{int(t_1):02}tiss_{t_2:04.1f}bone.bin'
-        data_mat1_pcd[i,:] = np.fromfile(fname1, dtype=np.float64)
-        data_mat2_pcd[i,:] = np.fromfile(fname2, dtype=np.float64)
-    
-    # EID : with and without electronic noise
-    data_mat1_eid = np.zeros([len(t_bones), len(r_vec)], dtype=np.float64)
-    data_mat2_eid = np.zeros([len(t_bones), len(r_vec)], dtype=np.float64)
-    data_mat1_eid_noiseless = np.zeros([len(t_bones), len(r_vec)], dtype=np.float64)
-    data_mat2_eid_noiseless = np.zeros([len(t_bones), len(r_vec)], dtype=np.float64)
-    for i, t_2 in enumerate(t_bones):
-        fname1 = outd_eid + specs_id + f'/mat1_{int(t_1):02}tiss_{t_2:04.1f}bone.bin'
-        fname2 = outd_eid + specs_id + f'/mat2_{int(t_1):02}tiss_{t_2:04.1f}bone.bin'
-        data_mat1_eid[i,:] = np.fromfile(fname1, dtype=np.float64)
-        data_mat2_eid[i,:] = np.fromfile(fname2, dtype=np.float64)
-        fname1 = outd_eid_noiseless + specs_id + f'/mat1_{int(t_1):02}tiss_{t_2:04.1f}bone.bin'
-        fname2 = outd_eid_noiseless + specs_id + f'/mat2_{int(t_1):02}tiss_{t_2:04.1f}bone.bin'
-        data_mat1_eid_noiseless[i,:] = np.fromfile(fname1, dtype=np.float64)
-        data_mat2_eid_noiseless[i,:] = np.fromfile(fname2, dtype=np.float64)
-    
-    # Spectral PCD : SNR vs. r for each t_bone
-    SPECTRAL = False
-    if SPECTRAL:
-        spectral_data_mat1 = {}
-        spectral_data_mat2 = {}
-        for E_thresh in E_thresh_vec:
-            spectral_id = f'{spec_a.name}_spectral_{E_thresh:03}keV/'
-            data_array_mat1 = np.zeros([len(t_bones), len(r_vec)], dtype=np.float64)
-            data_array_mat2 = np.zeros([len(t_bones), len(r_vec)], dtype=np.float64)
-            for i, t_2 in enumerate(t_bones):
-                fname1 = outd_pcd + spectral_id + f'mat1_{int(t_1):02}tiss_{t_2:04.1f}bone.bin'
-                fname2 = outd_pcd + spectral_id + f'mat2_{int(t_1):02}tiss_{t_2:04.1f}bone.bin'
-                data_array_mat1[i,:] = np.nan_to_num(np.fromfile(fname1, dtype=np.float64))
-                data_array_mat2[i,:] = np.nan_to_num(np.fromfile(fname2, dtype=np.float64))
-            spectral_data_mat1[E_thresh] = data_array_mat1
-            spectral_data_mat2[E_thresh] = data_array_mat2
 
+    # PCD + EID: SNR vs. r for each t_bone (one spectral combo)
+    specs_id = f'{spec_a.name}_{spec_b.name}'
+    dshape = [len(t_tissues), len(t_bones), len(r_vec)]
+    data_mat1_pcd = np.zeros(dshape, dtype=np.float64)
+    data_mat2_pcd = np.zeros(dshape, dtype=np.float64)
+    data_mat1_eid = np.zeros(dshape, dtype=np.float64)
+    data_mat2_eid = np.zeros(dshape, dtype=np.float64)
     
-    #%%  EID vs PCD (MV-kV) - SNR heatmaps t_bone vs r
+    for j, t_1 in enumerate(t_tissues):
+        for i, t_2 in enumerate(t_bones):
+            mat_id = f'{t_1:04.1f}tiss_{t_2:04.1f}bone'
+
+            fname1 = outd_pcd + specs_id + f'/mat1_{mat_id}.bin'
+            fname2 = outd_pcd + specs_id + f'/mat2_{mat_id}.bin'
+            data_mat1_pcd[j, i,:] = np.fromfile(fname1, dtype=np.float64)
+            data_mat2_pcd[j, i,:] = np.fromfile(fname2, dtype=np.float64)
+        
+            fname1 = outd_eid + specs_id + f'/mat1_{mat_id}.bin'
+            fname2 = outd_eid + specs_id + f'/mat2_{mat_id}.bin'
+            data_mat1_eid[j, i,:] = np.fromfile(fname1, dtype=np.float64)
+            data_mat2_eid[j, i,:] = np.fromfile(fname2, dtype=np.float64)
+
+    # # for ONE tissue thickness
+    # 
+    # # PCD : SNR vs. r for each t_bone (one spectral combo)
+    # specs_id = f'{spec_a.name}_{spec_b.name}'
+    # data_mat1_pcd = np.zeros([len(t_bones), len(r_vec)], dtype=np.float64)
+    # data_mat2_pcd = np.zeros([len(t_bones), len(r_vec)], dtype=np.float64)
+    # for i, t_2 in enumerate(t_bones):
+    #     fname1 = outd_pcd + specs_id + f'/mat1_{int(t_1):02}tiss_{t_2:04.1f}bone.bin'
+    #     fname2 = outd_pcd + specs_id + f'/mat2_{int(t_1):02}tiss_{t_2:04.1f}bone.bin'
+    #     data_mat1_pcd[i,:] = np.fromfile(fname1, dtype=np.float64)
+    #     data_mat2_pcd[i,:] = np.fromfile(fname2, dtype=np.float64)
+    #
+    # # EID : with and without electronic noise
+    # data_mat1_eid = np.zeros([len(t_bones), len(r_vec)], dtype=np.float64)
+    # data_mat2_eid = np.zeros([len(t_bones), len(r_vec)], dtype=np.float64)
+    # for i, t_2 in enumerate(t_bones):
+    #     fname1 = outd_eid + specs_id + f'/mat1_{int(t_1):02}tiss_{t_2:04.1f}bone.bin'
+    #     fname2 = outd_eid + specs_id + f'/mat2_{int(t_1):02}tiss_{t_2:04.1f}bone.bin'
+    #     data_mat1_eid[i,:] = np.fromfile(fname1, dtype=np.float64)
+    #     data_mat2_eid[i,:] = np.fromfile(fname2, dtype=np.float64)
+
+# # %% some calcs on the data
+# heatmaps of the peak coordinates (r, SNR) for each (t_tissue, t_bone) pair.
+    
+    snrmax_mat1_pcd = np.max(data_mat1_pcd, axis=2)
+    snrmax_mat2_pcd = np.max(data_mat2_pcd, axis=2)
+    snrmax_mat1_eid = np.max(data_mat1_eid, axis=2)
+    snrmax_mat2_eid = np.max(data_mat2_eid, axis=2)
+    snrmax_mat1_pcd.ravel().tofile(outd_pcd + 'snrmax_mat1.bin')
+    snrmax_mat2_pcd.ravel().tofile(outd_pcd + 'snrmax_mat2.bin')
+    snrmax_mat1_eid.ravel().tofile(outd_eid + 'snrmax_mat1.bin')
+    snrmax_mat2_eid.ravel().tofile(outd_eid + 'snrmax_mat2.bin')
+    
+    rmax_mat1_pcd = r_vec[np.argmax(data_mat1_pcd, axis=2)]
+    rmax_mat2_pcd = r_vec[np.argmax(data_mat2_pcd, axis=2)]
+    rmax_mat1_eid = r_vec[np.argmax(data_mat1_eid, axis=2)]
+    rmax_mat2_eid = r_vec[np.argmax(data_mat2_eid, axis=2)]
+    rmax_mat1_pcd.ravel().tofile(outd_pcd + 'rmax_mat1.bin')
+    rmax_mat2_pcd.ravel().tofile(outd_pcd + 'rmax_mat2.bin')
+    rmax_mat1_eid.ravel().tofile(outd_eid + 'rmax_mat1.bin')
+    rmax_mat2_eid.ravel().tofile(outd_eid + 'rmax_mat2.bin')
+
+
+#%% Dual-energy PCD and EID - SNR(r_opt) vs t_bone
+    
+    modekw = {'PCD': {'label':'PCD', 'color':'b', 'linestyle':'-' },
+              'EID': {'label':'EID', 'color':'r', 'linestyle':'--' }
+             }
+    
+    fig, ax = plt.subplots(1, 2, figsize=[7,3]) 
+    for mode, datas in [['PCD', [data_mat1_pcd, data_mat2_pcd]], 
+                        ['EID', [data_mat1_eid, data_mat2_eid]],
+                       ]: 
+        ax[0].plot(t_bones, np.max(datas[0], axis=1), **modekw[mode])
+        ax[1].plot(t_bones, np.max(datas[1], axis=1), **modekw[mode])
+    for i in range(2): 
+        ax[i].set_xlabel('bone thickness [cm]')
+        ax[i].set_ylabel('SNR($r_{opt}$)')
+        ax[i].legend()
+        ax[i].set_title(matnames[i])
+    fig.tight_layout()
+    if savefig:
+        plt.savefig(f'{figd}/SNRopt_{mode}.png', bbox_inches='tight')
+    else:
+        fig.suptitle(f'{spec_a.name}-{spec_b.name} - {mode}', y=1.02)
+    plt.show()
+
+
+
+#%% FIG : optimal dose vs t_bone
+
+    modekw = {'PCD': {'label':'PCD', 'color':'b', 'linestyle':'-' },
+              'EID': {'label':'EID', 'color':'r', 'linestyle':'--' }
+             }
+    
+    fig, ax = plt.subplots(1, 2, figsize=[7,3]) 
+    for mode, datas in [['PCD', [data_mat1_pcd, data_mat2_pcd]], 
+                        ['EID', [data_mat1_eid, data_mat2_eid]],
+                       ]: 
+        ax[0].plot(t_bones, r_vec[np.argmax(datas[0], axis=1)], **modekw[mode])
+        ax[1].plot(t_bones, r_vec[np.argmax(datas[1], axis=1)], **modekw[mode])
+    for i in range(2): 
+        ax[i].set_xlabel('bone thickness [cm]')
+        ax[i].set_ylabel('$r_{opt}$')
+        ax[i].legend()
+        ax[i].set_title(matnames[i])
+    fig.tight_layout()
+    #if savefig:
+    #    plt.savefig(f'{figd}/r_opt_{mode}.png', bbox_inches='tight')
+    #else:
+    #    fig.suptitle(f'{spec_a.name}-{spec_b.name}, {int(dose_target/1e-6)}'+' $\mu$Gy: SNR($r_{opt}$)', y=1.02)
+    plt.show()
+
+
+
+#%%  EID vs PCD (MV-kV) - SNR heatmaps t_bone vs r
+    
     dbone = t_bones[1] - t_bones[0]
     matkw = {'Tissue': {'vmax':100, 'vmin':0}, 'Bone': {'vmax':20, 'vmin':0}}  # 1 uGy + elec noise
     # matkw = {'Tissue': {}, 'Bone': {}}  # temp, for choosing kwargs
@@ -132,7 +210,7 @@ if __name__ == '__main__':
                         ['EID', [data_mat1_eid, data_mat2_eid]]]: 
         fig, ax = plt.subplots(1, 2, figsize=[7,3])
         for i, data_i in enumerate(datas):
-            m = ax[i].imshow(data_i.T, cmap='inferno', aspect='auto', 
+            m = ax[i].imshow(data_i.T, cmap='inferno', aspect='auto', origin='lower',
                     extent=(min(t_bones), max(t_bones), min(r_vec), max(r_vec)),
                     **matkw[matnames[i]])
             cb = fig.colorbar(m, ax=ax[i])
@@ -148,83 +226,85 @@ if __name__ == '__main__':
         if savefig:
             plt.savefig(f'{figd}/heatmap_{mode}.png', bbox_inches='tight')
         else:
-            fig.suptitle(f'MV-kV dual energy {mode}')
+            fig.suptitle(f'{spec_a.name}-{spec_b.name} - {mode}')
         plt.show()
     
-    #%% Spectral PCD (MV) - SNR(r_opt) heatmaps t_bone vs E_thresh
-
-    spectral_heatmap_mat1 = np.zeros([len(t_bones), len(E_thresh_vec)])
-    spectral_heatmap_mat2 = np.zeros([len(t_bones), len(E_thresh_vec)])
-    for i, E_thresh in enumerate(E_thresh_vec):
-        spectral_heatmap_mat1[:,i] = np.max(spectral_data_mat1[E_thresh], axis=1)
-        spectral_heatmap_mat2[:,i] = np.max(spectral_data_mat2[E_thresh], axis=1)
-    
-    datas = [spectral_heatmap_mat1, spectral_heatmap_mat2]
-    data_extent = (min(t_bones)-dbone/2, max(t_bones)+dbone/2, 
-                   min(E_thresh_vec)/1e3, max(E_thresh_vec)/1e3)  # MeV
-    matnames = ['Tissue', 'Bone']
-    fig, ax = plt.subplots(1, 2, figsize=[7,3])
-    for i, data_i in enumerate(datas):
-        m = ax[i].imshow(data_i.T, cmap='coolwarm', aspect='auto', 
-                         origin='lower', extent=data_extent)
-        fig.colorbar(m, ax=ax[i])
-        ax[i].set_xticks(t_bones)
-        ax[i].set_xlabel('bone thickness [cm]')
-        ax[i].set_ylabel('energy threshold [MeV]')
-        ax[i].set_title(f'{matnames[i]}' + ' SNR($r_{opt}$)') 
-    fig.tight_layout()
-    fig.suptitle('Spectral PCD (MV only)')
-    if savefig:
-        plt.savefig(f'{figd}/heatmap_spectralPCD.png', bbox_inches='tight')
-    plt.show()
-            
-    
-    #%% Dual-energy PCD and EID - SNR(r_opt) vs t_bone
-    modekw = {'PCD': {'label':'PCD', 'color':'b', 'linestyle':'-' },
-              'EID_noiseless': {'label':'EID (noiseless)', 'color':'k', 'linestyle':'-' },
-              'EID': {'label':'EID ($\sigma_e = $'+f' {int(detector_std_e)} photons)', 'color':'r', 'linestyle':'--' }
-             }
-    
-    fig, ax = plt.subplots(1, 2, figsize=[7,3]) 
-    for mode, datas in [['PCD', [data_mat1_pcd, data_mat2_pcd]], 
-                        ['EID_noiseless', [data_mat1_eid_noiseless, data_mat2_eid_noiseless]],
-                        ['EID', [data_mat1_eid, data_mat2_eid]],
-                       ]: 
-        ax[0].plot(t_bones, np.max(datas[0], axis=1), **modekw[mode])
-        ax[1].plot(t_bones, np.max(datas[1], axis=1), **modekw[mode])
-    for i in range(2): 
-        ax[i].set_xlabel('bone thickness [cm]')
-        ax[i].set_ylabel('SNR($r_{opt}$)')
-        ax[i].legend()
-        ax[i].set_title(matnames[i])
-    fig.tight_layout()
-    if savefig:
-        plt.savefig(f'{figd}/SNRopt_{mode}.png', bbox_inches='tight')
-    else:
-        fig.suptitle(f'{spec_a.name}-{spec_b.name}, {int(dose_target/1e-6)}'+' $\mu$Gy: SNR($r_{opt}$)', y=1.02)
-    plt.show()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
     
+#%% FIG : heatmap of SNR_peak for t_1, t_2
+    matkw = {'Tissue': {'vmin':0, 'vmax':110}, 
+             'Bone': {'vmin':0, 'vmax':110}}  
+    #matkw = {'Tissue': {}, 'Bone': {}}  # temp, for choosing kwargs
+    matnames = list(matkw.keys())
+    for mode, datas in [['PCD', [snrmax_mat1_pcd, snrmax_mat2_pcd]], 
+                        ['EID', [snrmax_mat1_eid, snrmax_mat2_eid]]]: 
+        fig, ax = plt.subplots(1, 2, figsize=[7,3])
+        for i, data_i in enumerate(datas):
+            m = ax[i].imshow(data_i.T, cmap='inferno', aspect='auto', origin='lower',
+                    extent=(min(t_tissues ), max(t_tissues), min(t_bones), max(t_bones)),
+                    **matkw[matnames[i]])
+            cb = fig.colorbar(m, ax=ax[i])
+            ax[i].set_xlabel('tissue thickness [cm]')
+            ax[i].set_ylabel('bone thickness [cm]')
+            ax[i].set_title(f'{matnames[i]}'+' SNR$_{max}$')   
+        #cb.set_ticks(np.arange(0, 21, 4))  # cheesy change to 2nd cbar ticks
+        fig.tight_layout()
+        if savefig:
+            plt.savefig(f'{figd}/snrmax_{mode}.png', bbox_inches='tight')
+        else:
+            fig.suptitle(f'{spec_a.name}-{spec_b.name} - {mode}')
+        plt.show()
     
+
+    #%% FIG : heatmap of SNR_peak for t_1, t_2
+        #matkw = {'Tissue': {'vmin':0, 'vmax':110}, 
+        #         'Bone': {'vmin':0, 'vmax':110}}  
+        matkw = {'Tissue': {'vmin':0.1, 'vmax':0.9}, 'Bone': {'vmin':0.1, 'vmax':0.9}}  # temp, for choosing kwargs
+        matnames = list(matkw.keys())
+        for mode, datas in [['PCD', [rmax_mat1_pcd, rmax_mat2_pcd]], 
+                            ['EID', [rmax_mat1_eid, rmax_mat2_eid]]]: 
+            fig, ax = plt.subplots(1, 2, figsize=[7,3])
+            for i, data_i in enumerate(datas):
+                m = ax[i].imshow(data_i.T, cmap='bwr', aspect='auto', origin='lower',
+                        extent=(min(t_tissues ), max(t_tissues), min(t_bones), max(t_bones)),
+                        **matkw[matnames[i]])
+                cb = fig.colorbar(m, ax=ax[i])
+                ax[i].set_xlabel('tissue thickness [cm]')
+                ax[i].set_ylabel('bone thickness [cm]')
+                ax[i].set_title(f'{matnames[i]}'+' r(SNR$_{max}$)')   
+            #cb.set_ticks(np.arange(0, 21, 4))  # cheesy change to 2nd cbar ticks
+            fig.tight_layout()
+            if savefig:
+                plt.savefig(f'{figd}/rmax_{mode}.png', bbox_inches='tight')
+            else:
+                fig.suptitle(f'{spec_a.name}-{spec_b.name} - {mode}')
+            plt.show()
+        
+
+        
     
+
+
+# #%% compute the r vector for given t1, t2 vector
+#     profdir = '../dex-ct-sim/output/mvkv_pcd/IQ7_PCD/'
+#     Nkern = 15
+#     t1profile = np.fromfile(profdir + f't1profile_kern{Nkern:02}_float32.bin', dtype=np.float32)
+#     t2profile = np.fromfile(profdir + f't2profile_kern{Nkern:02}_float32.bin', dtype=np.float32)
+
+#     # fig, ax = plt.subplots(1, 2, figsize=[7,3])
+#     # ax[0].plot(t1profile)
+#     # ax[1].plot(t2profile)
+#     # fig.tight_layout()
+#     # plt.show()
+
+#     t1grid, t2grid = np.meshgrid(t_tissues, t_bones)
+#     #f_rmax_mat1 = interpolate.interp2d(t1grid, t2grid, rmax_mat1_pcd)
+#     f_rmax_mat1 = interpolate.RectBivariateSpline(t1grid, t2grid, rmax_mat1_pcd)
+#     rmax_data = f_rmax_mat1(t1profile/p_1, t2profile/p_2)
     
-    
-    
-    
-    
+#     #plt.plot(rmax_data)
+#     #plt.show()
+#     print(rmax_data.shape)
+
 
 
